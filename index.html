@@ -206,6 +206,11 @@
 </style>
 </head>
 <body>
+<div id="loadingOverlay" style="position:fixed;inset:0;background:var(--page);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+  <div style="width:34px;height:34px;border:3px solid var(--gridline);border-top-color:var(--brand);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <div style="font-size:13px;color:var(--muted);">불러오는 중입니다...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg);}}</style>
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
@@ -392,17 +397,14 @@
         <input type="file" id="restoreFileInput" accept="application/json">
       </div>
       <div class="card adminOnly hidden">
-        <h2>관리자 비밀번호 변경</h2>
-        <div class="formGrid">
-          <div class="field"><label>현재 비밀번호</label><input type="password" id="pwCurrent"></div>
-          <div class="field"><label>새 비밀번호</label><input type="password" id="pwNew"></div>
-        </div>
-        <button class="btn" id="changePwBtn" style="margin-top:12px;">비밀번호 변경</button>
-        <div class="errorMsg hidden" id="pwChangeError"></div>
+        <h2>관리자 비밀번호 재설정</h2>
+        <p class="hintMsg">비밀번호는 Firebase 계정으로 관리됩니다. 아래 버튼을 누르면 현재 로그인된 관리자 이메일로 비밀번호 재설정 링크가 발송됩니다.</p>
+        <button class="btn" id="sendPwResetBtn">비밀번호 재설정 메일 보내기</button>
+        <div class="errorMsg hidden" id="pwResetError"></div>
       </div>
       <footer class="footNote">
-        본 앱은 현재 브라우저(이 기기)에 데이터를 저장하는 오프라인 모드로 동작합니다.<br>
-        개발가이드 4단계(Firebase 실시간 DB 연동)를 적용하면 여러 기기에서 동일한 데이터를 실시간으로 함께 볼 수 있습니다.
+        본 앱은 Firebase 실시간 데이터베이스에 데이터를 저장합니다. 여러 기기·여러 사람이 동시에 같은 데이터를 보고 편집할 수 있습니다.<br>
+        읽기는 누구나 가능하고, 등록·수정·삭제는 관리자로 로그인해야만 가능합니다.
       </footer>
     </section>
 
@@ -413,8 +415,9 @@
 <dialog id="loginDialog">
   <div class="dialogBody">
     <h3>관리자 로그인</h3>
-    <div class="field"><label>관리자 비밀번호</label><input type="password" id="loginPw" autocomplete="current-password"></div>
-    <div class="errorMsg hidden" id="loginError">비밀번호가 올바르지 않습니다.</div>
+    <div class="field"><label>관리자 이메일</label><input type="email" id="loginEmail" autocomplete="username"></div>
+    <div class="field" style="margin-top:10px;"><label>비밀번호</label><input type="password" id="loginPw" autocomplete="current-password"></div>
+    <div class="errorMsg hidden" id="loginError">이메일 또는 비밀번호가 올바르지 않습니다.</div>
     <div class="dialogActions">
       <button class="btn" id="loginCancelBtn" type="button">취소</button>
       <button class="btn primary" id="loginSubmitBtn" type="button">로그인</button>
@@ -526,6 +529,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="xlsx.full.min.js"></script>
+<script src="firebase-bundle.js"></script>
 <script>
 'use strict';
 
@@ -537,33 +541,6 @@ const SEED_HOUSEHOLDS = [[1,"201동","102호"],[2,"201동","103호"],[3,"201동"
 
 const SEED_TYPES = ['층간소음','누수','주차','시설물 고장','조경/청소','안전/보안','기타'];
 
-const DEFAULT_ADMIN_PW = 'admin1234';
-
-/* =========================================================
-   1. 저장소(DB) 계층 - localStorage 기반
-   추후 Firebase 연동 시 이 계층만 교체하면 됩니다 (get/set/init 인터페이스 동일 유지).
-   ========================================================= */
-const DB = {
-  KEYS:{
-    households:'mgmt_households',
-    commonAreas:'mgmt_commonareas',
-    types:'mgmt_types',
-    complaints:'mgmt_complaints',
-    adminPw:'mgmt_admin_pw',
-    initialized:'mgmt_initialized_v1'
-  },
-  get(key, fallback){
-    try{
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    }catch(e){ return fallback; }
-  },
-  set(key, value){
-    localStorage.setItem(key, JSON.stringify(value));
-  }
-};
-
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function nowLocalInput(){
   const d = new Date();
@@ -571,56 +548,181 @@ function nowLocalInput(){
   return d.toISOString().slice(0,16);
 }
 
-function initData(){
-  if(DB.get(DB.KEYS.initialized)) return;
+/* =========================================================
+   1. Firebase 연결 및 저장소(DB) 계층 - Firestore 실시간 동기화
+   각 컬렉션은 onSnapshot으로 캐시를 유지하며, 변경이 생기면
+   자동으로 현재 화면을 다시 그립니다(onDataChange).
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCN8_doN4EfIQGwaIlbZkPh4Kta_EtERE4",
+  authDomain: "minwon-verahills.firebaseapp.com",
+  projectId: "minwon-verahills",
+  storageBucket: "minwon-verahills.firebasestorage.app",
+  messagingSenderId: "21155822491",
+  appId: "1:21155822491:web:46b52f6dda8f9eec53bf3e",
+  measurementId: "G-R7CDTC1N5D"
+};
+const fbApp = FB.initializeApp(firebaseConfig);
+const db = FB.getFirestore(fbApp);
+const auth = FB.getAuth(fbApp);
+FB.setPersistence(auth, FB.browserLocalPersistence).catch(()=>{});
 
-  // 세대(동,호수) 최초 일괄등록
-  const households = SEED_HOUSEHOLDS.map(([seq,dong,ho])=>({
-    id: uid(), seq, dong, ho, regDate: todayStr()
-  }));
-  DB.set(DB.KEYS.households, households);
-
-  // 공용부 기본값: 아파트 각 동(동 목록 자동 생성) + 카테고리별 기본 1건
-  const dongs = [...new Set(households.map(h=>h.dong))].sort();
-  const commonAreas = [];
-  ['주차장','화단/조경','놀이터','커뮤니티'].forEach(cat=>{
-    commonAreas.push({id:uid(), category:cat, name:cat, regDate:todayStr()});
-  });
-  dongs.forEach(d=>{
-    commonAreas.push({id:uid(), category:'아파트 각 동', name:d, regDate:todayStr()});
-  });
-  commonAreas.push({id:uid(), category:'기타', name:'기타', regDate:todayStr()});
-  DB.set(DB.KEYS.commonAreas, commonAreas);
-
-  // 민원유형 기본값
-  DB.set(DB.KEYS.types, SEED_TYPES.map(name=>({id:uid(), name, regDate:todayStr()})));
-
-  // 민원이력 초기값 없음
-  DB.set(DB.KEYS.complaints, []);
-
-  // 관리자 비밀번호 기본값
-  DB.set(DB.KEYS.adminPw, DEFAULT_ADMIN_PW);
-
-  DB.set(DB.KEYS.initialized, true);
+function onDataChange(){
+  checkInitialLoadComplete();
+  renderAll();
 }
+function renderAll(){
+  if(!document.getElementById('view-dashboard')) return;
+  const view = currentViewName();
+  if(view==='dashboard') renderDashboard();
+  else if(view==='complaints') renderComplaints();
+  else if(view==='households') renderHouseholds();
+  else if(view==='commonareas') renderCommonAreas();
+  else if(view==='types') renderTypes();
+  else if(view==='backup') renderBackup();
+}
+function checkInitialLoadComplete(){
+  if(authReady && Households._ready && CommonAreas._ready && Types._ready && Complaints._ready){
+    const overlay = document.getElementById('loadingOverlay');
+    if(overlay) overlay.style.display = 'none';
+  }
+}
+
+function makeStore(name){
+  let cache = [];
+  const colRef = FB.collection(db, name);
+  const store = {
+    _ready:false,
+    all(){ return cache.slice(); },
+    async _addRaw(data){ return FB.addDoc(colRef, data); },
+    async update(id, patch){ await FB.updateDoc(FB.doc(db, name, id), patch); },
+    async remove(id){ await FB.deleteDoc(FB.doc(db, name, id)); },
+    async removeMany(ids){
+      const idArr = Array.from(ids);
+      for(let i=0;i<idArr.length;i+=450){
+        const batch = FB.writeBatch(db);
+        idArr.slice(i,i+450).forEach(id=>batch.delete(FB.doc(db, name, id)));
+        await batch.commit();
+      }
+    },
+    async bulkAdd(items){
+      for(let i=0;i<items.length;i+=450){
+        const batch = FB.writeBatch(db);
+        items.slice(i,i+450).forEach(item=>batch.set(FB.doc(colRef), item));
+        await batch.commit();
+      }
+    },
+    async bulkSet(itemsWithId){
+      for(let i=0;i<itemsWithId.length;i+=450){
+        const batch = FB.writeBatch(db);
+        itemsWithId.slice(i,i+450).forEach(({id, ...data})=>{
+          batch.set(FB.doc(db, name, id), data);
+        });
+        await batch.commit();
+      }
+    },
+    async replaceAll(items){
+      await this.removeMany(cache.map(c=>c.id));
+      await this.bulkAdd(items);
+    },
+    async replaceAllPreserveIds(itemsWithId){
+      await this.removeMany(cache.map(c=>c.id));
+      await this.bulkSet(itemsWithId);
+    }
+  };
+  FB.onSnapshot(colRef, (snap)=>{
+    cache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    store._ready = true;
+    onDataChange();
+  }, (err)=>{
+    console.error('Firestore('+name+') 오류:', err);
+    store._ready = true;
+    onDataChange();
+  });
+  return store;
+}
+
+const Households = makeStore('households');
+Households.dongs = function(){ return [...new Set(this.all().map(h=>h.dong))].sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})); };
+Households.hosByDong = function(dong){ return this.all().filter(h=>h.dong===dong).map(h=>h.ho).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})); };
+Households.add = async function(dong, ho){
+  if(this.all().some(h=>h.dong===dong && h.ho===ho)) return {ok:false, reason:'dup'};
+  const all = this.all();
+  const nextSeq = all.length ? Math.max(...all.map(h=>h.seq||0))+1 : 1;
+  await this._addRaw({seq:nextSeq, dong, ho, regDate:todayStr()});
+  return {ok:true};
+};
+
+const CommonAreas = makeStore('commonAreas');
+CommonAreas.add = async function(category, name){
+  await this._addRaw({category, name, regDate:todayStr()});
+};
+
+const Types = makeStore('types');
+Types.add = async function(name){
+  if(this.all().some(t=>t.name===name)) return {ok:false};
+  await this._addRaw({name, regDate:todayStr()});
+  return {ok:true};
+};
+
+const Complaints = makeStore('complaints');
+Complaints.add = async function(item){
+  await this._addRaw({...item, createdAt: new Date().toISOString()});
+};
 
 /* =========================================================
-   2. 인증
+   2. 인증 (Firebase Authentication)
    ========================================================= */
-function isAdmin(){ return sessionStorage.getItem('mgmt_is_admin') === '1'; }
-function setAdmin(v){
-  if(v) sessionStorage.setItem('mgmt_is_admin','1');
-  else sessionStorage.removeItem('mgmt_is_admin');
-  clearAllSelections();
-  refreshAuthUI();
-}
+let currentUser = null;
+let authReady = false;
+let seedAttempted = false;
+
+function isAdmin(){ return !!currentUser; }
 function refreshAuthUI(){
   const admin = isAdmin();
-  document.getElementById('authStatus').textContent = admin ? '관리자 모드' : '읽기 전용 모드';
+  document.getElementById('authStatus').textContent = admin ? ('관리자 모드'+(currentUser && currentUser.email ? ' ('+currentUser.email+')' : '')) : '읽기 전용 모드';
   document.getElementById('authStatus').classList.toggle('isAdmin', admin);
   document.getElementById('loginBtn').classList.toggle('hidden', admin);
   document.getElementById('logoutBtn').classList.toggle('hidden', !admin);
   document.querySelectorAll('.adminOnly').forEach(el=>el.classList.toggle('hidden', !admin));
+}
+FB.onAuthStateChanged(auth, (user)=>{
+  currentUser = user;
+  authReady = true;
+  clearAllSelections();
+  refreshAuthUI();
+  maybeSeed();
+  onDataChange();
+});
+
+// 최초 배포 후 관리자가 처음 로그인하면, 비어있는 컬렉션에 한해 1회만 초기 데이터를 채웁니다.
+async function maybeSeed(){
+  if(seedAttempted) return;
+  if(!authReady || !Households._ready || !CommonAreas._ready || !Types._ready) return;
+  if(!isAdmin()) return;
+  if(Households.all().length>0) return;
+  seedAttempted = true;
+  try{
+    toast('초기 데이터를 준비하는 중입니다...');
+    const householdItems = SEED_HOUSEHOLDS.map(([seq,dong,ho])=>({seq,dong,ho,regDate:todayStr()}));
+    await Households.bulkAdd(householdItems);
+
+    if(CommonAreas.all().length===0){
+      const dongs = [...new Set(SEED_HOUSEHOLDS.map(r=>r[1]))].sort();
+      const caItems = [];
+      ['주차장','화단/조경','놀이터','커뮤니티'].forEach(cat=>caItems.push({category:cat, name:cat, regDate:todayStr()}));
+      dongs.forEach(d=>caItems.push({category:'아파트 각 동', name:d, regDate:todayStr()}));
+      caItems.push({category:'기타', name:'기타', regDate:todayStr()});
+      await CommonAreas.bulkAdd(caItems);
+    }
+    if(Types.all().length===0){
+      await Types.bulkAdd(SEED_TYPES.map(name=>({name, regDate:todayStr()})));
+    }
+    toast('초기 데이터 등록이 완료되었습니다.');
+  }catch(err){
+    console.error('초기 데이터 등록 실패', err);
+    seedAttempted = false;
+  }
 }
 
 /* =========================================================
@@ -660,65 +762,8 @@ function statusBadge(status){
   return `<span class="badge" style="background:${s.tint};color:${s.color};"><span class="dot" style="background:${s.color};"></span>${esc(status)}</span>`;
 }
 
-/* =========================================================
-   4. 데이터 접근 헬퍼
-   ========================================================= */
-const Households = {
-  all(){ return DB.get(DB.KEYS.households, []); },
-  save(list){ DB.set(DB.KEYS.households, list); },
-  dongs(){ return [...new Set(this.all().map(h=>h.dong))].sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})); },
-  hosByDong(dong){ return this.all().filter(h=>h.dong===dong).map(h=>h.ho).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})); },
-  nextSeq(){ const all=this.all(); return all.length ? Math.max(...all.map(h=>h.seq||0))+1 : 1; },
-  add(dong, ho){
-    const list = this.all();
-    if(list.some(h=>h.dong===dong && h.ho===ho)) return {ok:false, reason:'dup'};
-    list.push({id:uid(), seq:this.nextSeq(), dong, ho, regDate:todayStr()});
-    this.save(list);
-    return {ok:true};
-  },
-  remove(id){ this.save(this.all().filter(h=>h.id!==id)); }
-};
-
-const CommonAreas = {
-  all(){ return DB.get(DB.KEYS.commonAreas, []); },
-  save(list){ DB.set(DB.KEYS.commonAreas, list); },
-  add(category, name){
-    const list = this.all();
-    list.push({id:uid(), category, name, regDate:todayStr()});
-    this.save(list);
-  },
-  remove(id){ this.save(this.all().filter(c=>c.id!==id)); }
-};
-
-const Types = {
-  all(){ return DB.get(DB.KEYS.types, []); },
-  save(list){ DB.set(DB.KEYS.types, list); },
-  add(name){
-    const list = this.all();
-    if(list.some(t=>t.name===name)) return {ok:false};
-    list.push({id:uid(), name, regDate:todayStr()});
-    this.save(list);
-    return {ok:true};
-  },
-  remove(id){ this.save(this.all().filter(t=>t.id!==id)); }
-};
-
-const Complaints = {
-  all(){ return DB.get(DB.KEYS.complaints, []); },
-  save(list){ DB.set(DB.KEYS.complaints, list); },
-  add(item){
-    const list = this.all();
-    item.id = uid(); item.createdAt = new Date().toISOString();
-    list.push(item);
-    this.save(list);
-  },
-  update(id, patch){
-    const list = this.all();
-    const idx = list.findIndex(c=>c.id===id);
-    if(idx>-1){ list[idx] = {...list[idx], ...patch}; this.save(list); }
-  },
-  remove(id){ this.save(this.all().filter(c=>c.id!==id)); }
-};
+/* 4. 데이터 접근 헬퍼(Households/CommonAreas/Types/Complaints)는
+      위 "1. Firebase 연결 및 저장소 계층"에서 정의됩니다. */
 
 /* =========================================================
    4b. 체크박스 일괄 선택/삭제 공통 헬퍼
@@ -1040,7 +1085,7 @@ function openComplaintDialog(id){
 }
 document.getElementById('addComplaintBtn').addEventListener('click', ()=>openComplaintDialog(null));
 document.getElementById('complaintCancelBtn').addEventListener('click', ()=>complaintDialog.close());
-document.getElementById('complaintSaveBtn').addEventListener('click', ()=>{
+document.getElementById('complaintSaveBtn').addEventListener('click', async ()=>{
   const type = document.getElementById('c_type').value;
   const datetime = document.getElementById('c_datetime').value;
   if(!type || !datetime){
@@ -1064,24 +1109,29 @@ document.getElementById('complaintSaveBtn').addEventListener('click', ()=>{
     cost: Number(document.getElementById('c_cost').value)||0,
     memo: document.getElementById('c_memo').value.trim()
   };
-  if(editingComplaintId){ Complaints.update(editingComplaintId, payload); toast('민원이 수정되었습니다.'); }
-  else{ Complaints.add(payload); toast('민원이 등록되었습니다.'); }
-  complaintDialog.close();
-  renderComplaints(); renderDashboard();
+  try{
+    if(editingComplaintId){ await Complaints.update(editingComplaintId, payload); toast('민원이 수정되었습니다.'); }
+    else{ await Complaints.add(payload); toast('민원이 등록되었습니다.'); }
+    complaintDialog.close();
+    renderComplaints(); renderDashboard();
+  }catch(err){
+    const errEl = document.getElementById('complaintError');
+    errEl.textContent = '저장 실패: '+(err.message||err); errEl.classList.remove('hidden');
+  }
 });
-document.getElementById('deleteComplaintBtn').addEventListener('click', ()=>{
+document.getElementById('deleteComplaintBtn').addEventListener('click', async ()=>{
   if(!editingComplaintId) return;
   if(!confirm('이 민원을 삭제하시겠습니까?')) return;
-  Complaints.remove(editingComplaintId);
+  await Complaints.remove(editingComplaintId);
   complaintDialog.close();
   toast('민원이 삭제되었습니다.');
   renderComplaints(); renderDashboard();
 });
-document.getElementById('bulkDeleteComplaintsBtn').addEventListener('click', ()=>{
+document.getElementById('bulkDeleteComplaintsBtn').addEventListener('click', async ()=>{
   if(!Selection.complaints.size) return;
   if(!confirm(`선택한 ${Selection.complaints.size}건의 민원을 삭제하시겠습니까?`)) return;
   const ids = new Set(Selection.complaints);
-  Complaints.save(Complaints.all().filter(c=>!ids.has(c.id)));
+  await Complaints.removeMany(ids);
   Selection.complaints.clear();
   toast('선택한 민원이 삭제되었습니다.');
   renderComplaints(); renderDashboard();
@@ -1114,18 +1164,18 @@ function renderHouseholds(){
 document.getElementById('hh_f_dong').addEventListener('change', renderHouseholds);
 document.getElementById('hh_f_ho').addEventListener('input', renderHouseholds);
 
-function removeHousehold(id){
+async function removeHousehold(id){
   if(!isAdmin()) return;
   if(!confirm('이 세대를 삭제하시겠습니까?')) return;
-  Households.remove(id);
+  await Households.remove(id);
   toast('삭제되었습니다.');
   renderHouseholds(); renderDashboard();
 }
-document.getElementById('bulkDeleteHouseholdsBtn').addEventListener('click', ()=>{
+document.getElementById('bulkDeleteHouseholdsBtn').addEventListener('click', async ()=>{
   if(!Selection.households.size) return;
   if(!confirm(`선택한 ${Selection.households.size}세대를 삭제하시겠습니까?`)) return;
   const ids = new Set(Selection.households);
-  Households.save(Households.all().filter(h=>!ids.has(h.id)));
+  await Households.removeMany(ids);
   Selection.households.clear();
   document.getElementById('hh_f_dong').dataset.init='';
   toast('선택한 세대가 삭제되었습니다.');
@@ -1139,12 +1189,12 @@ document.getElementById('addHouseholdBtn').addEventListener('click', ()=>{
   householdDialog.showModal();
 });
 document.getElementById('householdCancelBtn').addEventListener('click', ()=>householdDialog.close());
-document.getElementById('householdSaveBtn').addEventListener('click', ()=>{
+document.getElementById('householdSaveBtn').addEventListener('click', async ()=>{
   const dong = document.getElementById('h_dong').value.trim();
   const ho = document.getElementById('h_ho').value.trim();
   const err = document.getElementById('householdError');
   if(!dong || !ho){ err.textContent='동, 호수를 모두 입력하세요.'; err.classList.remove('hidden'); return; }
-  const r = Households.add(dong, ho);
+  const r = await Households.add(dong, ho);
   if(!r.ok){ err.textContent='이미 등록된 세대입니다.'; err.classList.remove('hidden'); return; }
   householdDialog.close();
   toast('세대가 등록되었습니다.');
@@ -1166,7 +1216,7 @@ document.getElementById('bulkFileInput').addEventListener('change', (e)=>{
   if(!file) return;
   const mode = document.getElementById('bulkMode').value;
   const reader = new FileReader();
-  reader.onload = (evt)=>{
+  reader.onload = async (evt)=>{
     try{
       const wb = XLSX.read(evt.target.result, {type:'array'});
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -1179,18 +1229,28 @@ document.getElementById('bulkFileInput').addEventListener('change', (e)=>{
       const hoKey = findKey(sample, ['호','호수']);
       if(!dongKey || !hoKey) throw new Error('컬럼 없음: "동", "호(호수)" 헤더를 확인하세요.');
 
-      let list = mode==='replace' ? [] : Households.all();
-      let added=0, skipped=0, seq = list.length ? Math.max(...list.map(h=>h.seq||0))+1 : 1;
+      document.getElementById('bulkResult').textContent = '처리 중입니다...';
+
+      const existing = mode==='replace' ? [] : Households.all();
+      const seen = new Set(existing.map(h=>h.dong+'|'+h.ho));
+      let added=0, skipped=0, seq = existing.length ? Math.max(...existing.map(h=>h.seq||0))+1 : 1;
+      const newItems = [];
       rows.forEach(row=>{
         const dong = String(row[dongKey]).trim();
         const ho = String(row[hoKey]).trim();
         if(!dong || !ho) return;
-        if(list.some(h=>h.dong===dong && h.ho===ho)){ skipped++; return; }
-        list.push({id:uid(), seq:seq++, dong, ho, regDate:todayStr()});
+        const key = dong+'|'+ho;
+        if(seen.has(key)){ skipped++; return; }
+        seen.add(key);
+        newItems.push({seq:seq++, dong, ho, regDate:todayStr()});
         added++;
       });
-      Households.save(list);
-      document.getElementById('bulkResult').innerHTML = `✅ 등록 완료 — 추가 <b>${added}</b>건, 중복 건너뜀 <b>${skipped}</b>건, 현재 총 <b>${list.length}</b>세대`;
+
+      if(mode==='replace'){ await Households.replaceAll(newItems); }
+      else{ await Households.bulkAdd(newItems); }
+
+      const total = existing.length + added;
+      document.getElementById('bulkResult').innerHTML = `✅ 등록 완료 — 추가 <b>${added}</b>건, 중복 건너뜀 <b>${skipped}</b>건, 현재 총 <b>${total}</b>세대`;
       toast('일괄등록이 완료되었습니다.');
       document.getElementById('hh_f_dong').dataset.init='';
       renderHouseholds(); renderDashboard();
@@ -1215,18 +1275,18 @@ function renderCommonAreas(){
     </tr>`).join('') : `<tr class="emptyRow"><td colspan="5">등록된 공용부가 없습니다.</td></tr>`;
   bindSelection({containerId:'commonAreasBody', selectAllId:'commonAreasSelectAll', bulkBtnId:'bulkDeleteCommonAreasBtn', set:Selection.commonAreas, ids:list.map(a=>a.id)});
 }
-function removeCommonArea(id){
+async function removeCommonArea(id){
   if(!isAdmin()) return;
   if(!confirm('이 공용부를 삭제하시겠습니까?')) return;
-  CommonAreas.remove(id);
+  await CommonAreas.remove(id);
   toast('삭제되었습니다.');
   renderCommonAreas(); renderDashboard();
 }
-document.getElementById('bulkDeleteCommonAreasBtn').addEventListener('click', ()=>{
+document.getElementById('bulkDeleteCommonAreasBtn').addEventListener('click', async ()=>{
   if(!Selection.commonAreas.size) return;
   if(!confirm(`선택한 ${Selection.commonAreas.size}건의 공용부를 삭제하시겠습니까?`)) return;
   const ids = new Set(Selection.commonAreas);
-  CommonAreas.save(CommonAreas.all().filter(a=>!ids.has(a.id)));
+  await CommonAreas.removeMany(ids);
   Selection.commonAreas.clear();
   toast('선택한 공용부가 삭제되었습니다.');
   renderCommonAreas(); renderDashboard();
@@ -1238,12 +1298,12 @@ document.getElementById('addCommonAreaBtn').addEventListener('click', ()=>{
   commonAreaDialog.showModal();
 });
 document.getElementById('commonAreaCancelBtn').addEventListener('click', ()=>commonAreaDialog.close());
-document.getElementById('commonAreaSaveBtn').addEventListener('click', ()=>{
+document.getElementById('commonAreaSaveBtn').addEventListener('click', async ()=>{
   const category = document.getElementById('ca_category').value;
   const name = document.getElementById('ca_name').value.trim();
   const err = document.getElementById('commonAreaError');
   if(!name){ err.textContent='명칭을 입력하세요.'; err.classList.remove('hidden'); return; }
-  CommonAreas.add(category, name);
+  await CommonAreas.add(category, name);
   commonAreaDialog.close();
   toast('공용부가 등록되었습니다.');
   renderCommonAreas(); renderDashboard();
@@ -1263,18 +1323,18 @@ function renderTypes(){
     </tr>`).join('') : `<tr class="emptyRow"><td colspan="4">등록된 민원유형이 없습니다.</td></tr>`;
   bindSelection({containerId:'typesBody', selectAllId:'typesSelectAll', bulkBtnId:'bulkDeleteTypesBtn', set:Selection.types, ids:list.map(t=>t.id)});
 }
-function removeType(id){
+async function removeType(id){
   if(!isAdmin()) return;
   if(!confirm('이 민원유형을 삭제하시겠습니까?')) return;
-  Types.remove(id);
+  await Types.remove(id);
   toast('삭제되었습니다.');
   renderTypes();
 }
-document.getElementById('bulkDeleteTypesBtn').addEventListener('click', ()=>{
+document.getElementById('bulkDeleteTypesBtn').addEventListener('click', async ()=>{
   if(!Selection.types.size) return;
   if(!confirm(`선택한 ${Selection.types.size}건의 민원유형을 삭제하시겠습니까?`)) return;
   const ids = new Set(Selection.types);
-  Types.save(Types.all().filter(t=>!ids.has(t.id)));
+  await Types.removeMany(ids);
   Selection.types.clear();
   toast('선택한 민원유형이 삭제되었습니다.');
   renderTypes();
@@ -1286,11 +1346,11 @@ document.getElementById('addTypeBtn').addEventListener('click', ()=>{
   typeDialog.showModal();
 });
 document.getElementById('typeCancelBtn').addEventListener('click', ()=>typeDialog.close());
-document.getElementById('typeSaveBtn').addEventListener('click', ()=>{
+document.getElementById('typeSaveBtn').addEventListener('click', async ()=>{
   const name = document.getElementById('t_name').value.trim();
   const err = document.getElementById('typeError');
   if(!name){ err.textContent='유형명을 입력하세요.'; err.classList.remove('hidden'); return; }
-  const r = Types.add(name);
+  const r = await Types.add(name);
   if(!r.ok){ err.textContent='이미 등록된 유형입니다.'; err.classList.remove('hidden'); return; }
   typeDialog.close();
   toast('민원유형이 등록되었습니다.');
@@ -1326,18 +1386,20 @@ document.getElementById('restoreFileInput').addEventListener('change', (e)=>{
   if(!file) return;
   if(!confirm('현재 데이터를 백업 파일 내용으로 덮어씁니다. 계속하시겠습니까?')){ e.target.value=''; return; }
   const reader = new FileReader();
-  reader.onload = (evt)=>{
+  reader.onload = async (evt)=>{
     try{
       const data = JSON.parse(evt.target.result);
-      if(data.households) Households.save(data.households);
-      if(data.commonAreas) CommonAreas.save(data.commonAreas);
-      if(data.types) Types.save(data.types);
-      if(data.complaints) Complaints.save(data.complaints);
+      toast('데이터를 복원하는 중입니다...');
+      if(data.households) await Households.replaceAllPreserveIds(data.households);
+      if(data.commonAreas) await CommonAreas.replaceAllPreserveIds(data.commonAreas);
+      if(data.types) await Types.replaceAllPreserveIds(data.types);
+      if(data.complaints) await Complaints.replaceAllPreserveIds(data.complaints);
       toast('데이터를 복원했습니다.');
       document.getElementById('hh_f_dong').dataset.init='';
       document.getElementById('f_targetDetail').dataset.init='';
       renderBackup(); renderDashboard();
     }catch(err){
+      console.error('복원 실패', err);
       alert('복원 실패: 올바른 백업 파일이 아닙니다.');
     }
     e.target.value='';
@@ -1350,28 +1412,39 @@ document.getElementById('restoreFileInput').addEventListener('change', (e)=>{
    ========================================================= */
 const loginDialog = document.getElementById('loginDialog');
 document.getElementById('loginBtn').addEventListener('click', ()=>{
+  document.getElementById('loginEmail').value='';
   document.getElementById('loginPw').value='';
   document.getElementById('loginError').classList.add('hidden');
   loginDialog.showModal();
-  setTimeout(()=>document.getElementById('loginPw').focus(), 50);
+  setTimeout(()=>document.getElementById('loginEmail').focus(), 50);
 });
 document.getElementById('loginCancelBtn').addEventListener('click', ()=>loginDialog.close());
-function attemptLogin(){
+async function attemptLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
   const pw = document.getElementById('loginPw').value;
-  const stored = DB.get(DB.KEYS.adminPw, DEFAULT_ADMIN_PW);
-  if(pw === stored){
-    setAdmin(true);
+  const err = document.getElementById('loginError');
+  err.classList.add('hidden');
+  if(!email || !pw){
+    err.textContent='이메일과 비밀번호를 입력하세요.';
+    err.classList.remove('hidden');
+    return;
+  }
+  try{
+    await FB.signInWithEmailAndPassword(auth, email, pw);
     loginDialog.close();
     toast('관리자로 로그인했습니다.');
     showView(currentViewName());
-  }else{
-    document.getElementById('loginError').classList.remove('hidden');
+  }catch(e){
+    console.error('로그인 실패', e);
+    err.textContent='이메일 또는 비밀번호가 올바르지 않습니다.';
+    err.classList.remove('hidden');
   }
 }
 document.getElementById('loginSubmitBtn').addEventListener('click', attemptLogin);
 document.getElementById('loginPw').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); attemptLogin(); } });
-document.getElementById('logoutBtn').addEventListener('click', ()=>{
-  setAdmin(false);
+document.getElementById('loginEmail').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); attemptLogin(); } });
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await FB.signOut(auth);
   toast('로그아웃되었습니다.');
   showView(currentViewName());
 });
@@ -1379,23 +1452,27 @@ function currentViewName(){
   const active = document.querySelector('.navBtn.active');
   return active ? active.dataset.view : 'dashboard';
 }
-document.getElementById('changePwBtn').addEventListener('click', ()=>{
-  const cur = document.getElementById('pwCurrent').value;
-  const next = document.getElementById('pwNew').value;
-  const err = document.getElementById('pwChangeError');
-  const stored = DB.get(DB.KEYS.adminPw, DEFAULT_ADMIN_PW);
-  if(cur !== stored){ err.textContent='현재 비밀번호가 올바르지 않습니다.'; err.classList.remove('hidden'); return; }
-  if(!next || next.length < 4){ err.textContent='새 비밀번호는 4자 이상이어야 합니다.'; err.classList.remove('hidden'); return; }
-  DB.set(DB.KEYS.adminPw, next);
+document.getElementById('sendPwResetBtn').addEventListener('click', async ()=>{
+  const err = document.getElementById('pwResetError');
   err.classList.add('hidden');
-  document.getElementById('pwCurrent').value=''; document.getElementById('pwNew').value='';
-  toast('비밀번호가 변경되었습니다.');
+  if(!currentUser || !currentUser.email){
+    err.textContent='로그인 후 이용해주세요.';
+    err.classList.remove('hidden');
+    return;
+  }
+  try{
+    await FB.sendPasswordResetEmail(auth, currentUser.email);
+    toast(`${currentUser.email} 주소로 재설정 메일을 보냈습니다.`);
+  }catch(e){
+    console.error('비밀번호 재설정 메일 발송 실패', e);
+    err.textContent='메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.';
+    err.classList.remove('hidden');
+  }
 });
 
 /* =========================================================
    13. 초기 실행
    ========================================================= */
-initData();
 refreshAuthUI();
 showView('dashboard');
 </script>
