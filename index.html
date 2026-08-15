@@ -665,6 +665,9 @@ const CommonAreas = makeStore('commonAreas');
 CommonAreas.add = async function(category, name){
   await this._addRaw({category, name, regDate:todayStr()});
 };
+CommonAreas.sorted = function(){
+  return [...this.all()].sort((a,b)=>a.category.localeCompare(b.category,'ko')||a.name.localeCompare(b.name,'ko',{numeric:true}));
+};
 
 const Types = makeStore('types');
 Types.add = async function(name){
@@ -935,7 +938,7 @@ function populateTargetDetailFilter(){
   if(type==='세대'){
     sel.innerHTML = '<option value="">전체</option>' + Households.dongs().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
   }else if(type==='공용부'){
-    sel.innerHTML = '<option value="">전체</option>' + CommonAreas.all().map(a=>`<option value="${a.id}">[${esc(a.category)}] ${esc(a.name)}</option>`).join('');
+    sel.innerHTML = '<option value="">전체</option>' + CommonAreas.sorted().map(a=>`<option value="${a.id}">[${esc(a.category)}] ${esc(a.name)}</option>`).join('');
   }else{
     sel.innerHTML = '<option value="">전체</option>';
   }
@@ -1033,7 +1036,7 @@ function fillTargetHoOptions(){
 }
 function fillTargetAreaOptions(){
   const sel = document.getElementById('c_targetArea');
-  sel.innerHTML = CommonAreas.all().map(a=>`<option value="${a.id}">[${esc(a.category)}] ${esc(a.name)}</option>`).join('');
+  sel.innerHTML = CommonAreas.sorted().map(a=>`<option value="${a.id}">[${esc(a.category)}] ${esc(a.name)}</option>`).join('');
 }
 document.getElementById('c_targetDong').addEventListener('change', fillTargetHoOptions);
 document.getElementById('c_targetType').addEventListener('change', ()=>{
