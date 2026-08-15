@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>래미안베라힐즈 민원관리시스템</title>
+<meta name="theme-color" content="#2a78d6">
+<meta name="description" content="래미안베라힐즈 아파트 민원관리 웹앱">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --brand:#2a78d6;
+    --brand-dark:#184f95;
+    --brand-tint:#eaf2fc;
+    --surface:#fcfcfb;
+    --page:#f4f4f2;
+    --text-primary:#0b0b0b;
+    --text-secondary:#52514e;
+    --muted:#898781;
+    --gridline:#e1e0d9;
+    --border:rgba(11,11,11,0.10);
+    --good:#0ca30c;
+    --good-tint:#e7f7e7;
+    --warning:#c98500;
+    --warning-tint:#fef3df;
+    --serious:#ec835a;
+    --serious-tint:#fce8e0;
+    --critical:#d03b3b;
+    --critical-tint:#fbe6e6;
+    --muted-tint:#eeede9;
+    --radius:10px;
+    --sidebar-w:236px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    background:var(--page);
+    color:var(--text-primary);
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;font-size:14px;}
+  a{color:var(--brand);}
+
+  .app{display:flex;min-height:100vh;}
+
+  /* Sidebar */
+  .sidebar{
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    background:var(--surface);
+    border-right:1px solid var(--gridline);
+    display:flex;flex-direction:column;
+    position:sticky;top:0;height:100vh;
+  }
+  .brand{
+    padding:20px 18px 14px;
+    border-bottom:1px solid var(--gridline);
+  }
+  .brand .name{font-weight:700;font-size:15px;color:var(--text-primary);}
+  .brand .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  nav.mainNav{flex:1;padding:10px 10px;overflow-y:auto;}
+  .navBtn{
+    display:flex;align-items:center;gap:10px;
+    width:100%;text-align:left;
+    padding:10px 12px;margin-bottom:4px;
+    border:none;background:transparent;border-radius:8px;
+    font-size:14px;color:var(--text-secondary);font-weight:500;
+  }
+  .navBtn:hover{background:var(--brand-tint);color:var(--brand-dark);}
+  .navBtn.active{background:var(--brand);color:#fff;}
+  .navIcon{font-size:16px;width:18px;text-align:center;}
+
+  .authBox{padding:14px 16px;border-top:1px solid var(--gridline);}
+  #authStatus{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.4;}
+  #authStatus.isAdmin{color:var(--good);font-weight:600;}
+  .authBtnRow{display:flex;gap:6px;flex-wrap:wrap;}
+  .btn{
+    border:1px solid var(--gridline);background:var(--surface);
+    padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;
+    color:var(--text-primary);
+  }
+  .btn:hover{border-color:var(--brand);color:var(--brand-dark);}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .btn.primary:hover{background:var(--brand-dark);border-color:var(--brand-dark);}
+  .btn.danger{border-color:var(--critical);color:var(--critical);background:var(--surface);}
+  .btn.danger:hover{background:var(--critical-tint);}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--text-secondary);}
+  .btn.small{padding:5px 9px;font-size:12px;border-radius:6px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .hidden{display:none !important;}
+
+  /* Main content */
+  .content{flex:1;min-width:0;padding:26px 30px 60px;}
+  .view{display:none;}
+  .view.active{display:block;animation:fadeIn .15s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+
+  .pageHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+  .pageHead h1{font-size:20px;margin:0;}
+  .pageHead .desc{font-size:13px;color:var(--muted);margin-top:2px;}
+
+  .card{
+    background:var(--surface);border:1px solid var(--gridline);
+    border-radius:var(--radius);padding:18px 20px;margin-bottom:18px;
+  }
+  .card h2{font-size:15px;margin:0 0 14px;}
+
+  /* Dashboard stat tiles */
+  .statGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px;}
+  .statTile{
+    background:var(--surface);border:1px solid var(--gridline);border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .statTile .label{font-size:12px;color:var(--muted);margin-bottom:8px;}
+  .statTile .value{font-size:26px;font-weight:700;color:var(--text-primary);font-variant-numeric:tabular-nums;}
+  .statTile .value .unit{font-size:13px;font-weight:500;color:var(--text-secondary);margin-left:3px;}
+
+  .twoCol{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;}
+  @media (max-width:980px){.twoCol{grid-template-columns:1fr;}}
+
+  .barRow{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+  .barRow:last-child{margin-bottom:0;}
+  .barRow .barLabel{width:96px;flex:0 0 96px;font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;}
+  .barRow .barTrack{flex:1;background:var(--muted-tint);border-radius:6px;height:14px;overflow:hidden;}
+  .barRow .barFill{height:100%;border-radius:6px;min-width:2px;}
+  .barRow .barValue{width:44px;flex:0 0 44px;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 8px;}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{
+    text-align:left;font-size:12px;color:var(--muted);font-weight:600;
+    padding:9px 10px;border-bottom:1px solid var(--gridline);white-space:nowrap;
+  }
+  tbody td{padding:10px 10px;border-bottom:1px solid var(--gridline);vertical-align:middle;}
+  tbody tr:hover{background:var(--brand-tint);}
+  tbody tr.clickable{cursor:pointer;}
+  .tableWrap{overflow-x:auto;}
+  .emptyRow td{text-align:center;color:var(--muted);padding:30px 10px;}
+
+  /* Badges */
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600;
+    white-space:nowrap;
+  }
+  .badge .dot{width:7px;height:7px;}
+
+  /* Filters / forms */
+  .filterBar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:12px;color:var(--muted);font-weight:600;}
+  .field input,.field select,.field textarea{
+    padding:8px 10px;border:1px solid var(--gridline);border-radius:8px;
+    background:var(--surface);color:var(--text-primary);min-width:120px;
+  }
+  .field textarea{min-width:220px;resize:vertical;}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--brand);outline-offset:1px;}
+
+  .formGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .formGrid .full{grid-column:1/-1;}
+  @media (max-width:640px){.formGrid{grid-template-columns:1fr;}}
+
+  .toolRow{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .toolRow .right{display:flex;gap:8px;flex-wrap:wrap;}
+
+  /* Dialogs */
+  dialog{
+    border:none;border-radius:14px;padding:0;width:min(560px,92vw);
+    box-shadow:0 10px 40px rgba(0,0,0,.18);
+  }
+  dialog::backdrop{background:rgba(11,11,11,.42);}
+  .dialogBody{padding:22px 24px;}
+  .dialogBody h3{margin:0 0 16px;font-size:17px;}
+  .dialogActions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+  .errorMsg{color:var(--critical);font-size:12.5px;margin-top:8px;}
+  .hintMsg{color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.5;}
+  .noticeBox{
+    background:var(--brand-tint);border:1px solid var(--brand);border-radius:8px;
+    padding:10px 12px;font-size:12.5px;color:var(--brand-dark);margin-bottom:14px;line-height:1.6;
+  }
+
+  .pill{display:inline-block;padding:2px 8px;border-radius:99px;background:var(--muted-tint);font-size:11.5px;color:var(--text-secondary);font-weight:600;}
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    background:var(--text-primary);color:#fff;padding:11px 18px;border-radius:99px;
+    font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+
+  footer.footNote{margin-top:26px;font-size:11.5px;color:var(--muted);line-height:1.7;}
+
+  @media (max-width:860px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%;flex:none;height:auto;position:relative;flex-direction:row;flex-wrap:wrap;align-items:center;}
+    .brand{border-bottom:none;border-right:1px solid var(--gridline);padding:14px 16px;}
+    nav.mainNav{display:flex;overflow-x:auto;padding:8px;flex:1;}
+    .navBtn{width:auto;white-space:nowrap;}
+    .authBox{border-top:none;border-left:1px solid var(--gridline);padding:10px 14px;}
+    .content{padding:18px 16px 50px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="name">🏢 래미안베라힐즈</div>
+      <div class="sub">민원관리시스템</div>
+    </div>
+    <nav class="mainNav">
+      <button class="navBtn active" data-view="dashboard"><span class="navIcon">📊</span>대시보드</button>
+      <button class="navBtn" data-view="complaints"><span class="navIcon">📋</span>민원이력</button>
+      <button class="navBtn" data-view="households"><span class="navIcon">🏠</span>동·호수관리</button>
+      <button class="navBtn" data-view="commonareas"><span class="navIcon">🏗️</span>공용부관리</button>
+      <button class="navBtn" data-view="types"><span class="navIcon">🏷️</span>민원유형관리</button>
+      <button class="navBtn" data-view="backup"><span class="navIcon">💾</span>백업/복원</button>
+    </nav>
+    <div class="authBox">
+      <div id="authStatus">읽기 전용 모드</div>
+      <div class="authBtnRow">
+        <button class="btn primary small" id="loginBtn">관리자 로그인</button>
+        <button class="btn small hidden" id="logoutBtn">로그아웃</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="view active">
+      <div class="pageHead">
+        <div><h1>대시보드</h1><div class="desc">단지 민원 현황을 한눈에 확인합니다.</div></div>
+      </div>
+      <div class="statGrid" id="statGrid"></div>
+      <div class="twoCol">
+        <div class="card">
+          <h2>민원상태 현황</h2>
+          <div id="statusBars"></div>
+        </div>
+        <div class="card">
+          <h2>동별 민원 TOP 5</h2>
+          <div id="dongBars"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>최근 민원 5건</h2>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th>민원일시</th><th>유형</th><th>대상</th><th>민원인</th><th>상태</th><th>처리자</th></tr></thead>
+            <tbody id="recentComplaintsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPLAINTS -->
+    <section id="view-complaints" class="view">
+      <div class="pageHead">
+        <div><h1>민원이력</h1><div class="desc">민원을 등록하고 조회합니다.</div></div>
+        <div class="toolRow" style="margin:0;">
+          <button class="btn primary adminOnly hidden" id="addComplaintBtn">+ 민원 등록</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="filterBar">
+          <div class="field"><label>민원유형</label><select id="f_type"><option value="">전체</option></select></div>
+          <div class="field"><label>시작일</label><input type="date" id="f_start"></div>
+          <div class="field"><label>종료일</label><input type="date" id="f_end"></div>
+          <div class="field"><label>대상구분</label>
+            <select id="f_targetType"><option value="">전체</option><option value="세대">세대</option><option value="공용부">공용부</option></select>
+          </div>
+          <div class="field"><label>대상 상세</label><select id="f_targetDetail"><option value="">전체</option></select></div>
+          <div class="field"><label>민원상태</label>
+            <select id="f_status"><option value="">전체</option><option>접수</option><option>처리중</option><option>완료</option><option>보류</option><option>기타</option></select>
+          </div>
+          <div class="field"><label>처리자</label><input type="text" id="f_handler" placeholder="처리자명"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn small" id="resetFilterBtn">필터 초기화</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="toolRow">
+          <span class="pill" id="complaintCountPill">0건</span>
+          <div class="right">
+            <button class="btn danger small adminOnly hidden" id="bulkDeleteComplaintsBtn" disabled>선택 삭제</button>
+            <button class="btn small" id="exportComplaintsBtn">엑셀로 내보내기</button>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th style="width:34px;"><input type="checkbox" class="adminOnly hidden" id="complaintsSelectAll"></th><th>민원일시</th><th>유형</th><th>대상</th><th>민원인</th><th>상태</th><th>처리자</th><th>처리비용</th><th></th></tr></thead>
+            <tbody id="complaintsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOUSEHOLDS -->
+    <section id="view-households" class="view">
+      <div class="pageHead">
+        <div><h1>동·호수관리</h1><div class="desc">세대(동, 호수) 정보를 등록·조회·삭제합니다.</div></div>
+        <div class="toolRow" style="margin:0;">
+          <button class="btn adminOnly hidden" id="bulkUploadBtn">📥 엑셀 일괄등록</button>
+          <button class="btn primary adminOnly hidden" id="addHouseholdBtn">+ 세대 등록</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="filterBar">
+          <div class="field"><label>동 검색</label><select id="hh_f_dong"><option value="">전체</option></select></div>
+          <div class="field"><label>호수 검색</label><input type="text" id="hh_f_ho" placeholder="예: 1203"></div>
+        </div>
+        <div class="toolRow">
+          <span class="pill" id="hhCountPill">0세대</span>
+          <div class="right">
+            <button class="btn danger small adminOnly hidden" id="bulkDeleteHouseholdsBtn" disabled>선택 삭제</button>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th style="width:34px;"><input type="checkbox" class="adminOnly hidden" id="householdsSelectAll"></th><th style="width:70px;">연번</th><th>동</th><th>호수</th><th>등록일</th><th></th></tr></thead>
+            <tbody id="householdsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMMON AREAS -->
+    <section id="view-commonareas" class="view">
+      <div class="pageHead">
+        <div><h1>공용부관리</h1><div class="desc">공용부(주차장, 화단/조경, 놀이터, 커뮤니티, 아파트 각 동, 기타)를 등록·삭제합니다.</div></div>
+        <button class="btn primary adminOnly hidden" id="addCommonAreaBtn">+ 공용부 등록</button>
+      </div>
+      <div class="card">
+        <div class="toolRow">
+          <span class="pill" id="caCountPill">0건</span>
+          <div class="right">
+            <button class="btn danger small adminOnly hidden" id="bulkDeleteCommonAreasBtn" disabled>선택 삭제</button>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th style="width:34px;"><input type="checkbox" class="adminOnly hidden" id="commonAreasSelectAll"></th><th style="width:140px;">구분</th><th>명칭</th><th>등록일</th><th></th></tr></thead>
+            <tbody id="commonAreasBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TYPES -->
+    <section id="view-types" class="view">
+      <div class="pageHead">
+        <div><h1>민원유형관리</h1><div class="desc">민원 등록 시 사용할 민원유형을 관리합니다.</div></div>
+        <button class="btn primary adminOnly hidden" id="addTypeBtn">+ 유형 등록</button>
+      </div>
+      <div class="card">
+        <div class="toolRow">
+          <span class="pill" id="typeCountPill">0건</span>
+          <div class="right">
+            <button class="btn danger small adminOnly hidden" id="bulkDeleteTypesBtn" disabled>선택 삭제</button>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th style="width:34px;"><input type="checkbox" class="adminOnly hidden" id="typesSelectAll"></th><th>민원유형</th><th>등록일</th><th></th></tr></thead>
+            <tbody id="typesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- BACKUP -->
+    <section id="view-backup" class="view">
+      <div class="pageHead">
+        <div><h1>데이터 백업 / 복원</h1><div class="desc">전체 데이터를 파일로 저장하거나 복원합니다.</div></div>
+      </div>
+      <div class="card">
+        <h2>현재 데이터 현황</h2>
+        <div class="statGrid" id="backupStatGrid"></div>
+      </div>
+      <div class="card">
+        <h2>백업 (내보내기)</h2>
+        <p class="hintMsg">전체 데이터(세대, 공용부, 민원유형, 민원이력)를 JSON 파일로 내려받습니다. 정기적으로 백업해 두는 것을 권장합니다.</p>
+        <button class="btn primary" id="exportBackupBtn">⬇ 백업 파일 다운로드</button>
+      </div>
+      <div class="card adminOnly hidden" id="restoreCard">
+        <h2>복원 (불러오기)</h2>
+        <p class="hintMsg">백업 JSON 파일을 선택하면 현재 데이터를 덮어씁니다. 되돌릴 수 없으니 신중히 진행하세요.</p>
+        <input type="file" id="restoreFileInput" accept="application/json">
+      </div>
+      <div class="card adminOnly hidden">
+        <h2>관리자 비밀번호 변경</h2>
+        <div class="formGrid">
+          <div class="field"><label>현재 비밀번호</label><input type="password" id="pwCurrent"></div>
+          <div class="field"><label>새 비밀번호</label><input type="password" id="pwNew"></div>
+        </div>
+        <button class="btn" id="changePwBtn" style="margin-top:12px;">비밀번호 변경</button>
+        <div class="errorMsg hidden" id="pwChangeError"></div>
+      </div>
+      <footer class="footNote">
+        본 앱은 현재 브라우저(이 기기)에 데이터를 저장하는 오프라인 모드로 동작합니다.<br>
+        개발가이드 4단계(Firebase 실시간 DB 연동)를 적용하면 여러 기기에서 동일한 데이터를 실시간으로 함께 볼 수 있습니다.
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<!-- LOGIN DIALOG -->
+<dialog id="loginDialog">
+  <div class="dialogBody">
+    <h3>관리자 로그인</h3>
+    <div class="field"><label>관리자 비밀번호</label><input type="password" id="loginPw" autocomplete="current-password"></div>
+    <div class="errorMsg hidden" id="loginError">비밀번호가 올바르지 않습니다.</div>
+    <div class="dialogActions">
+      <button class="btn" id="loginCancelBtn" type="button">취소</button>
+      <button class="btn primary" id="loginSubmitBtn" type="button">로그인</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- COMPLAINT DIALOG -->
+<dialog id="complaintDialog">
+  <div class="dialogBody">
+    <h3 id="complaintDialogTitle">민원 등록</h3>
+    <div class="formGrid">
+      <div class="field"><label>민원유형</label><select id="c_type"></select></div>
+      <div class="field"><label>민원일시</label><input type="datetime-local" id="c_datetime"></div>
+      <div class="field"><label>민원처리대상</label>
+        <select id="c_targetType"><option value="세대">세대(동,호수)</option><option value="공용부">공용부</option></select>
+      </div>
+      <div class="field" id="c_targetDongWrap"><label>대상 동</label><select id="c_targetDong"></select></div>
+      <div class="field" id="c_targetHoWrap"><label>대상 호수</label><select id="c_targetHo"></select></div>
+      <div class="field hidden" id="c_targetAreaWrap"><label>공용부 선택</label><select id="c_targetArea"></select></div>
+      <div class="field"><label>민원인 (동/호수)</label><input type="text" id="c_reporter" placeholder="예: 205동 1203호"></div>
+      <div class="field"><label>민원상태</label>
+        <select id="c_status"><option>접수</option><option>처리중</option><option>완료</option><option>보류</option><option>기타</option></select>
+      </div>
+      <div class="field full"><label>민원내용</label><textarea id="c_content" rows="3"></textarea></div>
+      <div class="field"><label>처리자</label><input type="text" id="c_handler" placeholder="예: 관리소 김OO"></div>
+      <div class="field"><label>처리일시</label><input type="datetime-local" id="c_handledAt"></div>
+      <div class="field"><label>처리비용(원)</label><input type="number" id="c_cost" min="0" step="1000" placeholder="0"></div>
+      <div class="field full"><label>비고</label><textarea id="c_memo" rows="2"></textarea></div>
+    </div>
+    <div class="errorMsg hidden" id="complaintError"></div>
+    <div class="dialogActions">
+      <button class="btn danger hidden" id="deleteComplaintBtn" type="button">삭제</button>
+      <button class="btn" id="complaintCancelBtn" type="button">취소</button>
+      <button class="btn primary" id="complaintSaveBtn" type="button">저장</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- HOUSEHOLD DIALOG -->
+<dialog id="householdDialog">
+  <div class="dialogBody">
+    <h3>세대 등록</h3>
+    <div class="formGrid">
+      <div class="field"><label>동</label><input type="text" id="h_dong" placeholder="예: 201동"></div>
+      <div class="field"><label>호수</label><input type="text" id="h_ho" placeholder="예: 1203호"></div>
+    </div>
+    <div class="errorMsg hidden" id="householdError"></div>
+    <div class="dialogActions">
+      <button class="btn" id="householdCancelBtn" type="button">취소</button>
+      <button class="btn primary" id="householdSaveBtn" type="button">저장</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- BULK UPLOAD DIALOG -->
+<dialog id="bulkDialog">
+  <div class="dialogBody">
+    <h3>세대 엑셀 일괄등록</h3>
+    <div class="noticeBox">엑셀 파일의 첫 시트에 <b>연번, 동, 호</b> (또는 동, 호) 열이 있어야 합니다. 예: 1 / 201동 / 102호</div>
+    <div class="field"><label>등록 방식</label>
+      <select id="bulkMode">
+        <option value="merge">기존 목록 유지 + 새 항목만 추가 (중복 동·호수는 건너뜀)</option>
+        <option value="replace">기존 목록 전체 삭제 후 새로 등록</option>
+      </select>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>엑셀 파일 선택</label><input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv"></div>
+    <div id="bulkResult" class="hintMsg"></div>
+    <div class="dialogActions">
+      <button class="btn" id="bulkCancelBtn" type="button">닫기</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- COMMON AREA DIALOG -->
+<dialog id="commonAreaDialog">
+  <div class="dialogBody">
+    <h3>공용부 등록</h3>
+    <div class="formGrid">
+      <div class="field"><label>구분</label>
+        <select id="ca_category">
+          <option>주차장</option><option>화단/조경</option><option>놀이터</option>
+          <option>커뮤니티</option><option>아파트 각 동</option><option>기타</option>
+        </select>
+      </div>
+      <div class="field"><label>명칭</label><input type="text" id="ca_name" placeholder="예: 지하주차장 B2"></div>
+    </div>
+    <div class="errorMsg hidden" id="commonAreaError"></div>
+    <div class="dialogActions">
+      <button class="btn" id="commonAreaCancelBtn" type="button">취소</button>
+      <button class="btn primary" id="commonAreaSaveBtn" type="button">저장</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- TYPE DIALOG -->
+<dialog id="typeDialog">
+  <div class="dialogBody">
+    <h3>민원유형 등록</h3>
+    <div class="field"><label>유형명</label><input type="text" id="t_name" placeholder="예: 층간소음"></div>
+    <div class="errorMsg hidden" id="typeError"></div>
+    <div class="dialogActions">
+      <button class="btn" id="typeCancelBtn" type="button">취소</button>
+      <button class="btn primary" id="typeSaveBtn" type="button">저장</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script src="xlsx.full.min.js"></script>
+<script>
+'use strict';
+
+/* =========================================================
+   0. 시드 데이터 (엑셀 "세대(동호수)_래미안베라힐즈.xlsx" 최초 일괄등록분)
+   형식: [연번, 동, 호]
+   ========================================================= */
+const SEED_HOUSEHOLDS = [[1,"201동","102호"],[2,"201동","103호"],[3,"201동","104호"],[4,"201동","105호"],[5,"201동","201호"],[6,"201동","202호"],[7,"201동","203호"],[8,"201동","204호"],[9,"201동","205호"],[10,"201동","206호"],[11,"201동","301호"],[12,"201동","302호"],[13,"201동","303호"],[14,"201동","304호"],[15,"201동","305호"],[16,"201동","306호"],[17,"201동","401호"],[18,"201동","402호"],[19,"201동","403호"],[20,"201동","404호"],[21,"201동","405호"],[22,"201동","406호"],[23,"201동","501호"],[24,"201동","502호"],[25,"201동","503호"],[26,"201동","504호"],[27,"201동","505호"],[28,"201동","506호"],[29,"201동","601호"],[30,"201동","602호"],[31,"201동","603호"],[32,"201동","604호"],[33,"201동","605호"],[34,"201동","606호"],[35,"201동","701호"],[36,"201동","702호"],[37,"201동","703호"],[38,"201동","704호"],[39,"201동","705호"],[40,"201동","706호"],[41,"201동","801호"],[42,"201동","802호"],[43,"201동","803호"],[44,"201동","804호"],[45,"201동","805호"],[46,"201동","806호"],[47,"201동","901호"],[48,"201동","902호"],[49,"201동","903호"],[50,"201동","904호"],[51,"201동","905호"],[52,"201동","906호"],[53,"201동","1001호"],[54,"201동","1002호"],[55,"201동","1003호"],[56,"201동","1004호"],[57,"201동","1005호"],[58,"201동","1006호"],[59,"201동","1101호"],[60,"201동","1102호"],[61,"201동","1103호"],[62,"201동","1104호"],[63,"201동","1105호"],[64,"201동","1106호"],[65,"201동","1201호"],[66,"201동","1202호"],[67,"201동","1203호"],[68,"201동","1204호"],[69,"201동","1205호"],[70,"201동","1206호"],[71,"201동","1301호"],[72,"201동","1302호"],[73,"201동","1303호"],[74,"201동","1304호"],[75,"201동","1305호"],[76,"201동","1306호"],[77,"201동","1401호"],[78,"201동","1402호"],[79,"201동","1403호"],[80,"201동","1404호"],[81,"201동","1405호"],[82,"201동","1406호"],[83,"201동","1501호"],[84,"201동","1502호"],[85,"201동","1503호"],[86,"201동","1504호"],[87,"201동","1505호"],[88,"201동","1506호"],[89,"201동","1601호"],[90,"201동","1602호"],[91,"201동","1603호"],[92,"201동","1604호"],[93,"201동","1605호"],[94,"201동","1606호"],[95,"201동","1701호"],[96,"201동","1702호"],[97,"201동","1703호"],[98,"201동","1704호"],[99,"201동","1705호"],[100,"201동","1706호"],[101,"201동","1801호"],[102,"201동","1802호"],[103,"201동","1803호"],[104,"201동","1804호"],[105,"201동","1805호"],[106,"201동","1806호"],[107,"201동","1901호"],[108,"201동","1902호"],[109,"201동","1903호"],[110,"201동","1905호"],[111,"201동","1906호"],[112,"201동","2001호"],[113,"201동","2002호"],[114,"201동","2003호"],[115,"201동","2005호"],[116,"201동","2006호"],[117,"202동","102호"],[118,"202동","104호"],[119,"202동","105호"],[120,"202동","201호"],[121,"202동","202호"],[122,"202동","203호"],[123,"202동","204호"],[124,"202동","205호"],[125,"202동","301호"],[126,"202동","302호"],[127,"202동","303호"],[128,"202동","304호"],[129,"202동","305호"],[130,"202동","401호"],[131,"202동","402호"],[132,"202동","403호"],[133,"202동","404호"],[134,"202동","405호"],[135,"202동","501호"],[136,"202동","502호"],[137,"202동","503호"],[138,"202동","504호"],[139,"202동","505호"],[140,"202동","601호"],[141,"202동","602호"],[142,"202동","603호"],[143,"202동","604호"],[144,"202동","605호"],[145,"202동","701호"],[146,"202동","702호"],[147,"202동","703호"],[148,"202동","704호"],[149,"202동","705호"],[150,"202동","801호"],[151,"202동","802호"],[152,"202동","803호"],[153,"202동","804호"],[154,"202동","805호"],[155,"202동","901호"],[156,"202동","902호"],[157,"202동","903호"],[158,"202동","904호"],[159,"202동","905호"],[160,"202동","1001호"],[161,"202동","1002호"],[162,"202동","1003호"],[163,"202동","1004호"],[164,"202동","1005호"],[165,"202동","1101호"],[166,"202동","1102호"],[167,"202동","1103호"],[168,"202동","1104호"],[169,"202동","1105호"],[170,"202동","1201호"],[171,"202동","1202호"],[172,"202동","1203호"],[173,"202동","1204호"],[174,"202동","1205호"],[175,"202동","1301호"],[176,"202동","1302호"],[177,"202동","1303호"],[178,"202동","1304호"],[179,"202동","1305호"],[180,"202동","1401호"],[181,"202동","1402호"],[182,"202동","1403호"],[183,"202동","1404호"],[184,"202동","1405호"],[185,"202동","1501호"],[186,"202동","1502호"],[187,"202동","1503호"],[188,"202동","1504호"],[189,"202동","1505호"],[190,"202동","1601호"],[191,"202동","1602호"],[192,"202동","1603호"],[193,"202동","1604호"],[194,"202동","1605호"],[195,"202동","1701호"],[196,"202동","1702호"],[197,"202동","1703호"],[198,"202동","1704호"],[199,"202동","1705호"],[200,"202동","1801호"],[201,"202동","1802호"],[202,"202동","1803호"],[203,"202동","1804호"],[204,"202동","1805호"],[205,"202동","1901호"],[206,"202동","1902호"],[207,"202동","1903호"],[208,"202동","1904호"],[209,"202동","1905호"],[210,"202동","2001호"],[211,"202동","2002호"],[212,"202동","2003호"],[213,"202동","2004호"],[214,"202동","2005호"],[215,"203동","102호"],[216,"203동","104호"],[217,"203동","105호"],[218,"203동","106호"],[219,"203동","201호"],[220,"203동","202호"],[221,"203동","203호"],[222,"203동","204호"],[223,"203동","205호"],[224,"203동","206호"],[225,"203동","301호"],[226,"203동","302호"],[227,"203동","303호"],[228,"203동","304호"],[229,"203동","305호"],[230,"203동","306호"],[231,"203동","401호"],[232,"203동","402호"],[233,"203동","403호"],[234,"203동","404호"],[235,"203동","405호"],[236,"203동","406호"],[237,"203동","501호"],[238,"203동","502호"],[239,"203동","503호"],[240,"203동","504호"],[241,"203동","505호"],[242,"203동","506호"],[243,"203동","601호"],[244,"203동","602호"],[245,"203동","603호"],[246,"203동","604호"],[247,"203동","605호"],[248,"203동","606호"],[249,"203동","701호"],[250,"203동","702호"],[251,"203동","703호"],[252,"203동","704호"],[253,"203동","705호"],[254,"203동","706호"],[255,"203동","801호"],[256,"203동","802호"],[257,"203동","803호"],[258,"203동","804호"],[259,"203동","805호"],[260,"203동","806호"],[261,"203동","901호"],[262,"203동","902호"],[263,"203동","903호"],[264,"203동","904호"],[265,"203동","905호"],[266,"203동","906호"],[267,"203동","1001호"],[268,"203동","1002호"],[269,"203동","1003호"],[270,"203동","1004호"],[271,"203동","1005호"],[272,"203동","1006호"],[273,"203동","1101호"],[274,"203동","1102호"],[275,"203동","1103호"],[276,"203동","1104호"],[277,"203동","1105호"],[278,"203동","1106호"],[279,"203동","1201호"],[280,"203동","1202호"],[281,"203동","1203호"],[282,"203동","1204호"],[283,"203동","1205호"],[284,"203동","1206호"],[285,"203동","1301호"],[286,"203동","1302호"],[287,"203동","1303호"],[288,"203동","1304호"],[289,"203동","1305호"],[290,"203동","1306호"],[291,"203동","1401호"],[292,"203동","1402호"],[293,"203동","1403호"],[294,"203동","1404호"],[295,"203동","1405호"],[296,"203동","1406호"],[297,"203동","1501호"],[298,"203동","1502호"],[299,"203동","1503호"],[300,"203동","1504호"],[301,"203동","1505호"],[302,"203동","1506호"],[303,"203동","1601호"],[304,"203동","1602호"],[305,"203동","1603호"],[306,"203동","1604호"],[307,"203동","1605호"],[308,"203동","1606호"],[309,"203동","1701호"],[310,"203동","1702호"],[311,"203동","1703호"],[312,"203동","1704호"],[313,"203동","1705호"],[314,"203동","1706호"],[315,"203동","1801호"],[316,"203동","1802호"],[317,"203동","1803호"],[318,"203동","1804호"],[319,"203동","1805호"],[320,"203동","1806호"],[321,"203동","1901호"],[322,"203동","1902호"],[323,"203동","1903호"],[324,"203동","1904호"],[325,"203동","1905호"],[326,"203동","1906호"],[327,"203동","2001호"],[328,"203동","2002호"],[329,"203동","2003호"],[330,"203동","2004호"],[331,"203동","2006호"],[332,"204동","101호"],[333,"204동","102호"],[334,"204동","103호"],[335,"204동","104호"],[336,"204동","201호"],[337,"204동","202호"],[338,"204동","203호"],[339,"204동","204호"],[340,"204동","301호"],[341,"204동","302호"],[342,"204동","303호"],[343,"204동","304호"],[344,"204동","401호"],[345,"204동","402호"],[346,"204동","403호"],[347,"204동","404호"],[348,"204동","501호"],[349,"204동","502호"],[350,"204동","503호"],[351,"204동","504호"],[352,"204동","601호"],[353,"204동","602호"],[354,"204동","603호"],[355,"204동","604호"],[356,"204동","701호"],[357,"204동","702호"],[358,"204동","703호"],[359,"204동","704호"],[360,"204동","801호"],[361,"204동","802호"],[362,"204동","803호"],[363,"204동","804호"],[364,"204동","901호"],[365,"204동","902호"],[366,"204동","903호"],[367,"204동","904호"],[368,"204동","1001호"],[369,"204동","1002호"],[370,"204동","1003호"],[371,"204동","1004호"],[372,"204동","1101호"],[373,"204동","1102호"],[374,"204동","1103호"],[375,"204동","1104호"],[376,"204동","1201호"],[377,"204동","1202호"],[378,"204동","1203호"],[379,"204동","1204호"],[380,"204동","1301호"],[381,"204동","1302호"],[382,"204동","1303호"],[383,"204동","1304호"],[384,"204동","1401호"],[385,"204동","1402호"],[386,"204동","1403호"],[387,"204동","1404호"],[388,"204동","1501호"],[389,"204동","1502호"],[390,"204동","1503호"],[391,"204동","1504호"],[392,"204동","1601호"],[393,"204동","1602호"],[394,"204동","1603호"],[395,"204동","1604호"],[396,"204동","1701호"],[397,"204동","1702호"],[398,"204동","1703호"],[399,"204동","1704호"],[400,"204동","1803호"],[401,"204동","1804호"],[402,"204동","1903호"],[403,"204동","1904호"],[404,"205동","101호"],[405,"205동","102호"],[406,"205동","103호"],[407,"205동","104호"],[408,"205동","105호"],[409,"205동","106호"],[410,"205동","201호"],[411,"205동","202호"],[412,"205동","203호"],[413,"205동","204호"],[414,"205동","205호"],[415,"205동","206호"],[416,"205동","301호"],[417,"205동","302호"],[418,"205동","303호"],[419,"205동","304호"],[420,"205동","305호"],[421,"205동","306호"],[422,"205동","401호"],[423,"205동","402호"],[424,"205동","403호"],[425,"205동","404호"],[426,"205동","405호"],[427,"205동","406호"],[428,"205동","501호"],[429,"205동","502호"],[430,"205동","503호"],[431,"205동","504호"],[432,"205동","505호"],[433,"205동","506호"],[434,"205동","601호"],[435,"205동","602호"],[436,"205동","603호"],[437,"205동","604호"],[438,"205동","605호"],[439,"205동","606호"],[440,"205동","701호"],[441,"205동","702호"],[442,"205동","703호"],[443,"205동","704호"],[444,"205동","705호"],[445,"205동","706호"],[446,"205동","801호"],[447,"205동","802호"],[448,"205동","803호"],[449,"205동","804호"],[450,"205동","805호"],[451,"205동","806호"],[452,"205동","901호"],[453,"205동","902호"],[454,"205동","903호"],[455,"205동","904호"],[456,"205동","905호"],[457,"205동","906호"],[458,"205동","1001호"],[459,"205동","1002호"],[460,"205동","1003호"],[461,"205동","1004호"],[462,"205동","1005호"],[463,"205동","1006호"],[464,"205동","1101호"],[465,"205동","1102호"],[466,"205동","1103호"],[467,"205동","1104호"],[468,"205동","1105호"],[469,"205동","1106호"],[470,"205동","1201호"],[471,"205동","1202호"],[472,"205동","1203호"],[473,"205동","1204호"],[474,"205동","1205호"],[475,"205동","1206호"],[476,"205동","1301호"],[477,"205동","1302호"],[478,"205동","1303호"],[479,"205동","1304호"],[480,"205동","1305호"],[481,"205동","1306호"],[482,"205동","1401호"],[483,"205동","1402호"],[484,"205동","1403호"],[485,"205동","1404호"],[486,"205동","1405호"],[487,"205동","1406호"],[488,"205동","1501호"],[489,"205동","1502호"],[490,"205동","1503호"],[491,"205동","1504호"],[492,"205동","1505호"],[493,"205동","1506호"],[494,"205동","1601호"],[495,"205동","1602호"],[496,"205동","1603호"],[497,"205동","1604호"],[498,"205동","1605호"],[499,"205동","1606호"],[500,"205동","1703호"],[501,"205동","1704호"],[502,"205동","1705호"],[503,"205동","1706호"],[504,"205동","1803호"],[505,"205동","1804호"],[506,"205동","1805호"],[507,"205동","1806호"],[508,"206동","102호"],[509,"206동","103호"],[510,"206동","104호"],[511,"206동","105호"],[512,"206동","106호"],[513,"206동","107호"],[514,"206동","108호"],[515,"206동","109호"],[516,"206동","110호"],[517,"206동","201호"],[518,"206동","202호"],[519,"206동","203호"],[520,"206동","204호"],[521,"206동","205호"],[522,"206동","206호"],[523,"206동","207호"],[524,"206동","208호"],[525,"206동","209호"],[526,"206동","210호"],[527,"206동","301호"],[528,"206동","302호"],[529,"206동","303호"],[530,"206동","304호"],[531,"206동","305호"],[532,"206동","306호"],[533,"206동","307호"],[534,"206동","308호"],[535,"206동","309호"],[536,"206동","310호"],[537,"206동","401호"],[538,"206동","402호"],[539,"206동","403호"],[540,"206동","404호"],[541,"206동","405호"],[542,"206동","406호"],[543,"206동","407호"],[544,"206동","408호"],[545,"206동","409호"],[546,"206동","410호"],[547,"206동","501호"],[548,"206동","502호"],[549,"206동","503호"],[550,"206동","504호"],[551,"206동","505호"],[552,"206동","506호"],[553,"206동","507호"],[554,"206동","508호"],[555,"206동","509호"],[556,"206동","510호"],[557,"206동","601호"],[558,"206동","602호"],[559,"206동","603호"],[560,"206동","604호"],[561,"206동","605호"],[562,"206동","606호"],[563,"206동","607호"],[564,"206동","608호"],[565,"206동","609호"],[566,"206동","610호"],[567,"206동","701호"],[568,"206동","702호"],[569,"206동","703호"],[570,"206동","704호"],[571,"206동","705호"],[572,"206동","706호"],[573,"206동","707호"],[574,"206동","708호"],[575,"206동","709호"],[576,"206동","710호"],[577,"206동","801호"],[578,"206동","802호"],[579,"206동","803호"],[580,"206동","804호"],[581,"206동","805호"],[582,"206동","806호"],[583,"206동","807호"],[584,"206동","808호"],[585,"206동","809호"],[586,"206동","810호"],[587,"206동","901호"],[588,"206동","902호"],[589,"206동","903호"],[590,"206동","904호"],[591,"206동","905호"],[592,"206동","906호"],[593,"206동","907호"],[594,"206동","908호"],[595,"206동","909호"],[596,"206동","910호"],[597,"206동","1001호"],[598,"206동","1002호"],[599,"206동","1003호"],[600,"206동","1004호"],[601,"206동","1005호"],[602,"206동","1006호"],[603,"206동","1007호"],[604,"206동","1008호"],[605,"206동","1009호"],[606,"206동","1010호"],[607,"206동","1101호"],[608,"206동","1102호"],[609,"206동","1103호"],[610,"206동","1104호"],[611,"206동","1105호"],[612,"206동","1106호"],[613,"206동","1107호"],[614,"206동","1108호"],[615,"206동","1109호"],[616,"206동","1110호"],[617,"206동","1201호"],[618,"206동","1202호"],[619,"206동","1203호"],[620,"206동","1204호"],[621,"206동","1205호"],[622,"206동","1206호"],[623,"206동","1207호"],[624,"206동","1208호"],[625,"206동","1209호"],[626,"206동","1210호"],[627,"206동","1301호"],[628,"206동","1302호"],[629,"206동","1303호"],[630,"206동","1304호"],[631,"206동","1305호"],[632,"206동","1306호"],[633,"206동","1307호"],[634,"206동","1308호"],[635,"206동","1309호"],[636,"206동","1310호"],[637,"206동","1401호"],[638,"206동","1402호"],[639,"206동","1403호"],[640,"206동","1404호"],[641,"206동","1405호"],[642,"206동","1406호"],[643,"206동","1407호"],[644,"206동","1408호"],[645,"206동","1409호"],[646,"206동","1501호"],[647,"206동","1502호"],[648,"206동","1503호"],[649,"206동","1504호"],[650,"206동","1505호"],[651,"206동","1506호"],[652,"206동","1507호"],[653,"206동","1508호"],[654,"206동","1509호"],[655,"206동","1601호"],[656,"206동","1602호"],[657,"206동","1603호"],[658,"206동","1604호"],[659,"206동","1605호"],[660,"206동","1606호"],[661,"206동","1607호"],[662,"206동","1608호"],[663,"206동","1609호"],[664,"206동","1701호"],[665,"206동","1702호"],[666,"206동","1703호"],[667,"206동","1704호"],[668,"206동","1705호"],[669,"206동","1706호"],[670,"206동","1707호"],[671,"206동","1708호"],[672,"206동","1801호"],[673,"206동","1802호"],[674,"206동","1803호"],[675,"206동","1804호"],[676,"206동","1805호"],[677,"206동","1806호"],[678,"206동","1807호"],[679,"206동","1808호"],[680,"206동","1902호"],[681,"206동","1903호"],[682,"206동","1904호"],[683,"206동","1905호"],[684,"206동","1907호"],[685,"206동","1908호"],[686,"207동","201호"],[687,"207동","202호"],[688,"207동","203호"],[689,"207동","204호"],[690,"207동","205호"],[691,"207동","301호"],[692,"207동","302호"],[693,"207동","303호"],[694,"207동","304호"],[695,"207동","305호"],[696,"207동","401호"],[697,"207동","402호"],[698,"207동","403호"],[699,"207동","404호"],[700,"207동","405호"],[701,"207동","501호"],[702,"207동","502호"],[703,"207동","503호"],[704,"207동","504호"],[705,"207동","505호"],[706,"207동","601호"],[707,"207동","602호"],[708,"207동","603호"],[709,"207동","604호"],[710,"207동","605호"],[711,"207동","701호"],[712,"207동","702호"],[713,"207동","703호"],[714,"207동","704호"],[715,"207동","705호"],[716,"207동","801호"],[717,"207동","802호"],[718,"207동","803호"],[719,"207동","804호"],[720,"207동","805호"],[721,"207동","901호"],[722,"207동","902호"],[723,"207동","903호"],[724,"207동","904호"],[725,"207동","905호"],[726,"207동","1001호"],[727,"207동","1002호"],[728,"207동","1003호"],[729,"207동","1004호"],[730,"207동","1005호"],[731,"207동","1101호"],[732,"207동","1102호"],[733,"207동","1103호"],[734,"207동","1104호"],[735,"207동","1105호"],[736,"207동","1201호"],[737,"207동","1202호"],[738,"207동","1203호"],[739,"207동","1204호"],[740,"207동","1205호"],[741,"207동","1301호"],[742,"207동","1302호"],[743,"207동","1303호"],[744,"207동","1304호"],[745,"207동","1305호"],[746,"207동","1401호"],[747,"207동","1402호"],[748,"207동","1403호"],[749,"207동","1404호"],[750,"207동","1405호"],[751,"207동","1501호"],[752,"207동","1502호"],[753,"207동","1503호"],[754,"207동","1504호"],[755,"207동","1505호"],[756,"207동","1601호"],[757,"207동","1602호"],[758,"207동","1603호"],[759,"207동","1701호"],[760,"207동","1702호"],[761,"207동","1703호"],[762,"207동","1801호"],[763,"207동","1802호"],[764,"207동","1803호"],[765,"207동","1901호"],[766,"207동","1902호"],[767,"207동","1903호"],[768,"207동","2001호"],[769,"207동","2002호"],[770,"207동","2003호"],[771,"208동","102호"],[772,"208동","103호"],[773,"208동","105호"],[774,"208동","201호"],[775,"208동","202호"],[776,"208동","203호"],[777,"208동","204호"],[778,"208동","205호"],[779,"208동","301호"],[780,"208동","302호"],[781,"208동","303호"],[782,"208동","304호"],[783,"208동","305호"],[784,"208동","401호"],[785,"208동","402호"],[786,"208동","403호"],[787,"208동","404호"],[788,"208동","405호"],[789,"208동","501호"],[790,"208동","502호"],[791,"208동","503호"],[792,"208동","504호"],[793,"208동","505호"],[794,"208동","601호"],[795,"208동","602호"],[796,"208동","603호"],[797,"208동","604호"],[798,"208동","605호"],[799,"208동","701호"],[800,"208동","702호"],[801,"208동","703호"],[802,"208동","704호"],[803,"208동","705호"],[804,"208동","801호"],[805,"208동","802호"],[806,"208동","803호"],[807,"208동","804호"],[808,"208동","805호"],[809,"208동","901호"],[810,"208동","902호"],[811,"208동","903호"],[812,"208동","904호"],[813,"208동","905호"],[814,"208동","1001호"],[815,"208동","1002호"],[816,"208동","1003호"],[817,"208동","1004호"],[818,"208동","1005호"],[819,"208동","1101호"],[820,"208동","1102호"],[821,"208동","1103호"],[822,"208동","1104호"],[823,"208동","1105호"],[824,"208동","1201호"],[825,"208동","1202호"],[826,"208동","1203호"],[827,"208동","1204호"],[828,"208동","1205호"],[829,"208동","1301호"],[830,"208동","1302호"],[831,"208동","1303호"],[832,"208동","1304호"],[833,"208동","1305호"],[834,"208동","1401호"],[835,"208동","1402호"],[836,"208동","1403호"],[837,"208동","1404호"],[838,"208동","1405호"],[839,"208동","1501호"],[840,"208동","1502호"],[841,"208동","1503호"],[842,"208동","1504호"],[843,"208동","1505호"],[844,"208동","1601호"],[845,"208동","1602호"],[846,"208동","1603호"],[847,"208동","1604호"],[848,"208동","1605호"],[849,"208동","1701호"],[850,"208동","1702호"],[851,"208동","1703호"],[852,"208동","1704호"],[853,"208동","1705호"],[854,"208동","1801호"],[855,"208동","1802호"],[856,"208동","1803호"],[857,"208동","1804호"],[858,"208동","1805호"],[859,"208동","1901호"],[860,"208동","1902호"],[861,"208동","1903호"],[862,"208동","1904호"],[863,"208동","1905호"],[864,"208동","2001호"],[865,"208동","2002호"],[866,"208동","2003호"],[867,"208동","2004호"],[868,"208동","2005호"],[869,"209동","105호"],[870,"209동","201호"],[871,"209동","202호"],[872,"209동","203호"],[873,"209동","204호"],[874,"209동","205호"],[875,"209동","301호"],[876,"209동","302호"],[877,"209동","303호"],[878,"209동","304호"],[879,"209동","305호"],[880,"209동","401호"],[881,"209동","402호"],[882,"209동","403호"],[883,"209동","404호"],[884,"209동","405호"],[885,"209동","501호"],[886,"209동","502호"],[887,"209동","503호"],[888,"209동","504호"],[889,"209동","505호"],[890,"209동","601호"],[891,"209동","602호"],[892,"209동","603호"],[893,"209동","604호"],[894,"209동","605호"],[895,"209동","701호"],[896,"209동","702호"],[897,"209동","703호"],[898,"209동","704호"],[899,"209동","705호"],[900,"209동","801호"],[901,"209동","802호"],[902,"209동","803호"],[903,"209동","804호"],[904,"209동","805호"],[905,"209동","901호"],[906,"209동","902호"],[907,"209동","903호"],[908,"209동","904호"],[909,"209동","905호"],[910,"209동","1001호"],[911,"209동","1002호"],[912,"209동","1003호"],[913,"209동","1004호"],[914,"209동","1005호"],[915,"209동","1101호"],[916,"209동","1102호"],[917,"209동","1103호"],[918,"209동","1104호"],[919,"209동","1105호"],[920,"209동","1201호"],[921,"209동","1202호"],[922,"209동","1203호"],[923,"209동","1204호"],[924,"209동","1205호"],[925,"209동","1301호"],[926,"209동","1302호"],[927,"209동","1303호"],[928,"209동","1304호"],[929,"209동","1305호"],[930,"209동","1402호"],[931,"209동","1403호"],[932,"209동","1404호"],[933,"209동","1405호"],[934,"209동","1503호"],[935,"209동","1504호"],[936,"209동","1505호"],[937,"209동","1603호"],[938,"209동","1604호"],[939,"209동","1605호"],[940,"209동","1703호"],[941,"209동","1704호"],[942,"209동","1705호"],[943,"209동","1803호"],[944,"209동","1804호"],[945,"209동","1805호"],[946,"209동","1904호"],[947,"209동","1905호"],[948,"209동","2004호"],[949,"209동","2005호"],[950,"210동","101호"],[951,"210동","102호"],[952,"210동","104호"],[953,"210동","105호"],[954,"210동","201호"],[955,"210동","202호"],[956,"210동","203호"],[957,"210동","204호"],[958,"210동","205호"],[959,"210동","301호"],[960,"210동","302호"],[961,"210동","303호"],[962,"210동","304호"],[963,"210동","305호"],[964,"210동","401호"],[965,"210동","402호"],[966,"210동","403호"],[967,"210동","404호"],[968,"210동","405호"],[969,"210동","501호"],[970,"210동","502호"],[971,"210동","503호"],[972,"210동","504호"],[973,"210동","505호"],[974,"210동","601호"],[975,"210동","602호"],[976,"210동","603호"],[977,"210동","604호"],[978,"210동","605호"],[979,"210동","701호"],[980,"210동","702호"],[981,"210동","703호"],[982,"210동","704호"],[983,"210동","705호"],[984,"210동","801호"],[985,"210동","802호"],[986,"210동","803호"],[987,"210동","804호"],[988,"210동","805호"],[989,"210동","901호"],[990,"210동","902호"],[991,"210동","903호"],[992,"210동","904호"],[993,"210동","905호"],[994,"210동","1001호"],[995,"210동","1002호"],[996,"210동","1003호"],[997,"210동","1004호"],[998,"210동","1005호"],[999,"210동","1101호"],[1000,"210동","1102호"],[1001,"210동","1103호"],[1002,"210동","1104호"],[1003,"210동","1105호"],[1004,"210동","1201호"],[1005,"210동","1202호"],[1006,"210동","1203호"],[1007,"210동","1204호"],[1008,"210동","1205호"],[1009,"210동","1302호"],[1010,"210동","1303호"],[1011,"210동","1304호"],[1012,"210동","1305호"],[1013,"210동","1402호"],[1014,"210동","1403호"],[1015,"210동","1404호"],[1016,"210동","1405호"],[1017,"210동","1503호"],[1018,"210동","1504호"],[1019,"210동","1505호"],[1020,"210동","1603호"],[1021,"210동","1604호"],[1022,"210동","1605호"],[1023,"210동","1703호"],[1024,"210동","1704호"],[1025,"210동","1705호"],[1026,"210동","1803호"],[1027,"210동","1804호"],[1028,"210동","1805호"],[1029,"210동","1904호"],[1030,"210동","1905호"],[1031,"210동","2004호"],[1032,"210동","2005호"],[1033,"211동","101호"],[1034,"211동","102호"],[1035,"211동","104호"],[1036,"211동","105호"],[1037,"211동","201호"],[1038,"211동","202호"],[1039,"211동","203호"],[1040,"211동","204호"],[1041,"211동","205호"],[1042,"211동","301호"],[1043,"211동","302호"],[1044,"211동","303호"],[1045,"211동","304호"],[1046,"211동","305호"],[1047,"211동","401호"],[1048,"211동","402호"],[1049,"211동","403호"],[1050,"211동","404호"],[1051,"211동","405호"],[1052,"211동","501호"],[1053,"211동","502호"],[1054,"211동","503호"],[1055,"211동","504호"],[1056,"211동","505호"],[1057,"211동","601호"],[1058,"211동","602호"],[1059,"211동","603호"],[1060,"211동","604호"],[1061,"211동","605호"],[1062,"211동","701호"],[1063,"211동","702호"],[1064,"211동","703호"],[1065,"211동","704호"],[1066,"211동","705호"],[1067,"211동","801호"],[1068,"211동","802호"],[1069,"211동","803호"],[1070,"211동","804호"],[1071,"211동","805호"],[1072,"211동","901호"],[1073,"211동","902호"],[1074,"211동","903호"],[1075,"211동","904호"],[1076,"211동","905호"],[1077,"211동","1001호"],[1078,"211동","1002호"],[1079,"211동","1003호"],[1080,"211동","1004호"],[1081,"211동","1005호"],[1082,"211동","1101호"],[1083,"211동","1102호"],[1084,"211동","1103호"],[1085,"211동","1104호"],[1086,"211동","1105호"],[1087,"211동","1202호"],[1088,"211동","1203호"],[1089,"211동","1204호"],[1090,"211동","1205호"],[1091,"211동","1302호"],[1092,"211동","1303호"],[1093,"211동","1304호"],[1094,"211동","1305호"],[1095,"211동","1403호"],[1096,"211동","1404호"],[1097,"211동","1405호"],[1098,"211동","1503호"],[1099,"211동","1504호"],[1100,"211동","1505호"],[1101,"211동","1603호"],[1102,"211동","1604호"],[1103,"211동","1605호"],[1104,"211동","1703호"],[1105,"211동","1704호"],[1106,"211동","1705호"],[1107,"211동","1803호"],[1108,"211동","1804호"],[1109,"211동","1805호"],[1110,"211동","1904호"],[1111,"211동","1905호"],[1112,"211동","2004호"],[1113,"211동","2005호"],[1114,"212동","101호"],[1115,"212동","102호"],[1116,"212동","103호"],[1117,"212동","104호"],[1118,"212동","105호"],[1119,"212동","201호"],[1120,"212동","202호"],[1121,"212동","203호"],[1122,"212동","204호"],[1123,"212동","205호"],[1124,"212동","301호"],[1125,"212동","302호"],[1126,"212동","303호"],[1127,"212동","304호"],[1128,"212동","305호"],[1129,"212동","401호"],[1130,"212동","402호"],[1131,"212동","403호"],[1132,"212동","404호"],[1133,"212동","405호"],[1134,"212동","501호"],[1135,"212동","502호"],[1136,"212동","503호"],[1137,"212동","504호"],[1138,"212동","505호"],[1139,"212동","601호"],[1140,"212동","602호"],[1141,"212동","603호"],[1142,"212동","604호"],[1143,"212동","605호"],[1144,"212동","701호"],[1145,"212동","702호"],[1146,"212동","703호"],[1147,"212동","704호"],[1148,"212동","705호"],[1149,"212동","801호"],[1150,"212동","802호"],[1151,"212동","803호"],[1152,"212동","804호"],[1153,"212동","805호"],[1154,"212동","901호"],[1155,"212동","902호"],[1156,"212동","903호"],[1157,"212동","904호"],[1158,"212동","905호"],[1159,"212동","1001호"],[1160,"212동","1002호"],[1161,"212동","1003호"],[1162,"212동","1004호"],[1163,"212동","1005호"],[1164,"212동","1101호"],[1165,"212동","1102호"],[1166,"212동","1103호"],[1167,"212동","1104호"],[1168,"212동","1105호"],[1169,"212동","1201호"],[1170,"212동","1202호"],[1171,"212동","1203호"],[1172,"212동","1204호"],[1173,"212동","1205호"],[1174,"212동","1301호"],[1175,"212동","1302호"],[1176,"212동","1303호"],[1177,"212동","1304호"],[1178,"212동","1305호"],[1179,"212동","1401호"],[1180,"212동","1402호"],[1181,"212동","1403호"],[1182,"212동","1404호"],[1183,"212동","1405호"],[1184,"212동","1503호"],[1185,"212동","1504호"],[1186,"212동","1505호"],[1187,"212동","1603호"],[1188,"212동","1604호"],[1189,"212동","1605호"],[1190,"212동","1703호"],[1191,"212동","1704호"],[1192,"212동","1705호"],[1193,"212동","1803호"],[1194,"212동","1804호"],[1195,"212동","1805호"],[1196,"212동","1903호"],[1197,"212동","1904호"],[1198,"212동","1905호"],[1199,"212동","2004호"],[1200,"212동","2005호"],[1201,"213동","101호"],[1202,"213동","201호"],[1203,"213동","301호"],[1204,"213동","302호"],[1205,"213동","401호"],[1206,"213동","402호"],[1207,"213동","501호"],[1208,"213동","502호"],[1209,"213동","601호"],[1210,"213동","602호"],[1211,"213동","701호"],[1212,"213동","702호"],[1213,"213동","801호"],[1214,"213동","802호"],[1215,"213동","901호"],[1216,"213동","902호"],[1217,"213동","1001호"],[1218,"213동","1002호"],[1219,"213동","1101호"],[1220,"213동","1201호"],[1221,"214동","101호"],[1222,"214동","201호"],[1223,"214동","202호"],[1224,"214동","203호"],[1225,"214동","301호"],[1226,"214동","302호"],[1227,"214동","303호"],[1228,"214동","401호"],[1229,"214동","402호"],[1230,"214동","403호"],[1231,"214동","501호"],[1232,"214동","502호"],[1233,"214동","503호"],[1234,"214동","601호"],[1235,"214동","602호"],[1236,"214동","603호"],[1237,"214동","701호"],[1238,"214동","702호"],[1239,"214동","801호"],[1240,"214동","802호"],[1241,"214동","901호"],[1242,"214동","902호"],[1243,"214동","1001호"],[1244,"214동","1002호"],[1245,"214동","1101호"],[1246,"214동","1102호"],[1247,"214동","1201호"],[1248,"214동","1202호"],[1249,"215동","201호"],[1250,"215동","202호"],[1251,"215동","301호"],[1252,"215동","302호"],[1253,"215동","303호"],[1254,"215동","401호"],[1255,"215동","402호"],[1256,"215동","403호"],[1257,"215동","501호"],[1258,"215동","502호"],[1259,"215동","503호"],[1260,"215동","601호"],[1261,"215동","602호"],[1262,"215동","603호"],[1263,"215동","701호"],[1264,"215동","702호"],[1265,"215동","703호"],[1266,"215동","801호"],[1267,"215동","802호"],[1268,"215동","901호"],[1269,"215동","902호"],[1270,"215동","1001호"],[1271,"215동","1002호"],[1272,"215동","1101호"],[1273,"215동","1102호"],[1274,"215동","1202호"],[1275,"216동","101호"],[1276,"216동","102호"],[1277,"216동","201호"],[1278,"216동","202호"],[1279,"217동","102호"],[1280,"217동","103호"],[1281,"217동","104호"],[1282,"217동","201호"],[1283,"217동","202호"],[1284,"217동","203호"],[1285,"217동","204호"],[1286,"218동","101호"],[1287,"218동","102호"],[1288,"218동","201호"],[1289,"218동","202호"],[1290,"219동","101호"],[1291,"219동","102호"],[1292,"219동","103호"],[1293,"219동","104호"],[1294,"219동","201호"],[1295,"219동","202호"],[1296,"219동","203호"],[1297,"219동","204호"],[1298,"220동","101호"],[1299,"220동","102호"],[1300,"220동","103호"],[1301,"220동","104호"],[1302,"220동","201호"],[1303,"220동","202호"],[1304,"220동","203호"],[1305,"220동","204호"]];
+
+const SEED_TYPES = ['층간소음','누수','주차','시설물 고장','조경/청소','안전/보안','기타'];
+
+const DEFAULT_ADMIN_PW = 'admin1234';
+
+/* =========================================================
+   1. 저장소(DB) 계층 - localStorage 기반
+   추후 Firebase 연동 시 이 계층만 교체하면 됩니다 (get/set/init 인터페이스 동일 유지).
+   ========================================================= */
+const DB = {
+  KEYS:{
+    households:'mgmt_households',
+    commonAreas:'mgmt_commonareas',
+    types:'mgmt_types',
+    complaints:'mgmt_complaints',
+    adminPw:'mgmt_admin_pw',
+    initialized:'mgmt_initialized_v1'
+  },
+  get(key, fallback){
+    try{
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    }catch(e){ return fallback; }
+  },
+  set(key, value){
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+};
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function nowLocalInput(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  return d.toISOString().slice(0,16);
+}
+
+function initData(){
+  if(DB.get(DB.KEYS.initialized)) return;
+
+  // 세대(동,호수) 최초 일괄등록
+  const households = SEED_HOUSEHOLDS.map(([seq,dong,ho])=>({
+    id: uid(), seq, dong, ho, regDate: todayStr()
+  }));
+  DB.set(DB.KEYS.households, households);
+
+  // 공용부 기본값: 아파트 각 동(동 목록 자동 생성) + 카테고리별 기본 1건
+  const dongs = [...new Set(households.map(h=>h.dong))].sort();
+  const commonAreas = [];
+  ['주차장','화단/조경','놀이터','커뮤니티'].forEach(cat=>{
+    commonAreas.push({id:uid(), category:cat, name:cat, regDate:todayStr()});
+  });
+  dongs.forEach(d=>{
+    commonAreas.push({id:uid(), category:'아파트 각 동', name:d, regDate:todayStr()});
+  });
+  commonAreas.push({id:uid(), category:'기타', name:'기타', regDate:todayStr()});
+  DB.set(DB.KEYS.commonAreas, commonAreas);
+
+  // 민원유형 기본값
+  DB.set(DB.KEYS.types, SEED_TYPES.map(name=>({id:uid(), name, regDate:todayStr()})));
+
+  // 민원이력 초기값 없음
+  DB.set(DB.KEYS.complaints, []);
+
+  // 관리자 비밀번호 기본값
+  DB.set(DB.KEYS.adminPw, DEFAULT_ADMIN_PW);
+
+  DB.set(DB.KEYS.initialized, true);
+}
+
+/* =========================================================
+   2. 인증
+   ========================================================= */
+function isAdmin(){ return sessionStorage.getItem('mgmt_is_admin') === '1'; }
+function setAdmin(v){
+  if(v) sessionStorage.setItem('mgmt_is_admin','1');
+  else sessionStorage.removeItem('mgmt_is_admin');
+  clearAllSelections();
+  refreshAuthUI();
+}
+function refreshAuthUI(){
+  const admin = isAdmin();
+  document.getElementById('authStatus').textContent = admin ? '관리자 모드' : '읽기 전용 모드';
+  document.getElementById('authStatus').classList.toggle('isAdmin', admin);
+  document.getElementById('loginBtn').classList.toggle('hidden', admin);
+  document.getElementById('logoutBtn').classList.toggle('hidden', !admin);
+  document.querySelectorAll('.adminOnly').forEach(el=>el.classList.toggle('hidden', !admin));
+}
+
+/* =========================================================
+   3. 공통 유틸
+   ========================================================= */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function fmtDateTime(v){
+  if(!v) return '-';
+  const d = new Date(v);
+  if(isNaN(d)) return v;
+  const p = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fmtCost(v){
+  if(!v) return '-';
+  return Number(v).toLocaleString('ko-KR')+'원';
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const STATUS_STYLE = {
+  '접수':   {color:'#2a78d6', tint:'#eaf2fc', icon:'●'},
+  '처리중': {color:'#c98500', tint:'#fef3df', icon:'◐'},
+  '완료':   {color:'#0ca30c', tint:'#e7f7e7', icon:'✓'},
+  '보류':   {color:'#ec835a', tint:'#fce8e0', icon:'‖'},
+  '기타':   {color:'#898781', tint:'#eeede9', icon:'…'}
+};
+function statusBadge(status){
+  const s = STATUS_STYLE[status] || STATUS_STYLE['기타'];
+  return `<span class="badge" style="background:${s.tint};color:${s.color};"><span class="dot" style="background:${s.color};"></span>${esc(status)}</span>`;
+}
+
+/* =========================================================
+   4. 데이터 접근 헬퍼
+   ========================================================= */
+const Households = {
+  all(){ return DB.get(DB.KEYS.households, []); },
+  save(list){ DB.set(DB.KEYS.households, list); },
+  dongs(){ return [...new Set(this.all().map(h=>h.dong))].sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})); },
+  hosByDong(dong){ return this.all().filter(h=>h.dong===dong).map(h=>h.ho).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})); },
+  nextSeq(){ const all=this.all(); return all.length ? Math.max(...all.map(h=>h.seq||0))+1 : 1; },
+  add(dong, ho){
+    const list = this.all();
+    if(list.some(h=>h.dong===dong && h.ho===ho)) return {ok:false, reason:'dup'};
+    list.push({id:uid(), seq:this.nextSeq(), dong, ho, regDate:todayStr()});
+    this.save(list);
+    return {ok:true};
+  },
+  remove(id){ this.save(this.all().filter(h=>h.id!==id)); }
+};
+
+const CommonAreas = {
+  all(){ return DB.get(DB.KEYS.commonAreas, []); },
+  save(list){ DB.set(DB.KEYS.commonAreas, list); },
+  add(category, name){
+    const list = this.all();
+    list.push({id:uid(), category, name, regDate:todayStr()});
+    this.save(list);
+  },
+  remove(id){ this.save(this.all().filter(c=>c.id!==id)); }
+};
+
+const Types = {
+  all(){ return DB.get(DB.KEYS.types, []); },
+  save(list){ DB.set(DB.KEYS.types, list); },
+  add(name){
+    const list = this.all();
+    if(list.some(t=>t.name===name)) return {ok:false};
+    list.push({id:uid(), name, regDate:todayStr()});
+    this.save(list);
+    return {ok:true};
+  },
+  remove(id){ this.save(this.all().filter(t=>t.id!==id)); }
+};
+
+const Complaints = {
+  all(){ return DB.get(DB.KEYS.complaints, []); },
+  save(list){ DB.set(DB.KEYS.complaints, list); },
+  add(item){
+    const list = this.all();
+    item.id = uid(); item.createdAt = new Date().toISOString();
+    list.push(item);
+    this.save(list);
+  },
+  update(id, patch){
+    const list = this.all();
+    const idx = list.findIndex(c=>c.id===id);
+    if(idx>-1){ list[idx] = {...list[idx], ...patch}; this.save(list); }
+  },
+  remove(id){ this.save(this.all().filter(c=>c.id!==id)); }
+};
+
+/* =========================================================
+   4b. 체크박스 일괄 선택/삭제 공통 헬퍼
+   ========================================================= */
+const Selection = {
+  complaints: new Set(),
+  households: new Set(),
+  commonAreas: new Set(),
+  types: new Set()
+};
+function clearAllSelections(){
+  Object.values(Selection).forEach(s=>s.clear());
+}
+
+/**
+ * 각 render*() 함수의 tbody innerHTML 작성 직후 호출한다.
+ * cfg: {containerId, selectAllId, bulkBtnId, set, ids}
+ */
+function bindSelection(cfg){
+  const { containerId, selectAllId, bulkBtnId, set, ids } = cfg;
+  const admin = isAdmin();
+
+  document.querySelectorAll('#'+containerId+' .rowCheck').forEach(cb=>{
+    cb.checked = set.has(cb.dataset.id);
+    cb.addEventListener('click', e=>e.stopPropagation());
+    cb.addEventListener('change', e=>{
+      if(e.target.checked) set.add(e.target.dataset.id);
+      else set.delete(e.target.dataset.id);
+      updateSelectAllState();
+      updateBulkBtnState();
+    });
+  });
+
+  function updateSelectAllState(){
+    const sa = document.getElementById(selectAllId);
+    if(!sa) return;
+    sa.checked = ids.length>0 && ids.every(id=>set.has(id));
+    sa.indeterminate = !sa.checked && ids.some(id=>set.has(id));
+  }
+  function updateBulkBtnState(){
+    const btn = document.getElementById(bulkBtnId);
+    if(!btn) return;
+    btn.textContent = set.size ? `선택 삭제 (${set.size})` : '선택 삭제';
+    btn.disabled = set.size===0;
+  }
+
+  const sa = document.getElementById(selectAllId);
+  if(sa && admin){
+    sa.onchange = ()=>{
+      if(sa.checked) ids.forEach(id=>set.add(id));
+      else ids.forEach(id=>set.delete(id));
+      document.querySelectorAll('#'+containerId+' .rowCheck').forEach(cb=>cb.checked = set.has(cb.dataset.id));
+      updateBulkBtnState();
+    };
+  }
+  updateSelectAllState();
+  updateBulkBtnState();
+}
+
+/* =========================================================
+   5. 네비게이션
+   ========================================================= */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.navBtn').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  if(name==='dashboard') renderDashboard();
+  if(name==='complaints') renderComplaints();
+  if(name==='households') renderHouseholds();
+  if(name==='commonareas') renderCommonAreas();
+  if(name==='types') renderTypes();
+  if(name==='backup') renderBackup();
+}
+document.querySelectorAll('.navBtn').forEach(b=>{
+  b.addEventListener('click', ()=>showView(b.dataset.view));
+});
+
+/* =========================================================
+   6. 대시보드
+   ========================================================= */
+function renderDashboard(){
+  const households = Households.all();
+  const complaints = Complaints.all();
+  const commonAreas = CommonAreas.all();
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const monthCount = complaints.filter(c=>(c.datetime||'').slice(0,7)===thisMonth).length;
+
+  const stats = [
+    {label:'총 세대 수', value:households.length, unit:'세대'},
+    {label:'등록 공용부', value:commonAreas.length, unit:'건'},
+    {label:'총 민원 건수', value:complaints.length, unit:'건'},
+    {label:'이번 달 민원', value:monthCount, unit:'건'}
+  ];
+  document.getElementById('statGrid').innerHTML = stats.map(s=>`
+    <div class="statTile"><div class="label">${s.label}</div><div class="value">${s.value.toLocaleString()}<span class="unit">${s.unit}</span></div></div>
+  `).join('');
+
+  // 상태별 현황
+  const statuses = ['접수','처리중','완료','보류','기타'];
+  const maxCount = Math.max(1, ...statuses.map(s=>complaints.filter(c=>c.status===s).length));
+  document.getElementById('statusBars').innerHTML = statuses.map(s=>{
+    const cnt = complaints.filter(c=>c.status===s).length;
+    const st = STATUS_STYLE[s];
+    const pct = Math.round(cnt/maxCount*100);
+    return `<div class="barRow">
+      <div class="barLabel"><span class="dot" style="background:${st.color};"></span>${s}</div>
+      <div class="barTrack"><div class="barFill" style="width:${pct}%;background:${st.color};"></div></div>
+      <div class="barValue">${cnt}</div>
+    </div>`;
+  }).join('');
+
+  // 동별 민원 TOP5 (단일 색상 - magnitude 인코딩)
+  const dongCounts = {};
+  complaints.forEach(c=>{
+    const d = c.targetType==='세대' ? c.targetDong : (c.targetType==='공용부' && c.targetAreaCategory==='아파트 각 동' ? c.targetAreaName : null);
+    if(d) dongCounts[d] = (dongCounts[d]||0)+1;
+  });
+  const top5 = Object.entries(dongCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxDong = Math.max(1, ...top5.map(x=>x[1]));
+  document.getElementById('dongBars').innerHTML = top5.length ? top5.map(([d,cnt])=>{
+    const pct = Math.round(cnt/maxDong*100);
+    return `<div class="barRow">
+      <div class="barLabel">${esc(d)}</div>
+      <div class="barTrack"><div class="barFill" style="width:${pct}%;background:#2a78d6;"></div></div>
+      <div class="barValue">${cnt}</div>
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:13px;">등록된 민원이 없습니다.</div>';
+
+  // 최근 5건
+  const recent = [...complaints].sort((a,b)=>(b.datetime||'').localeCompare(a.datetime||'')).slice(0,5);
+  document.getElementById('recentComplaintsBody').innerHTML = recent.length ? recent.map(c=>`
+    <tr>
+      <td>${fmtDateTime(c.datetime)}</td>
+      <td>${esc(c.type)}</td>
+      <td>${targetLabel(c)}</td>
+      <td>${esc(c.reporter||'-')}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${esc(c.handler||'-')}</td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="6">등록된 민원이 없습니다.</td></tr>`;
+}
+
+function targetLabel(c){
+  if(c.targetType==='세대') return esc((c.targetDong||'')+' '+(c.targetHo||''));
+  if(c.targetType==='공용부') return esc(c.targetAreaName||'-');
+  return '-';
+}
+
+/* =========================================================
+   7. 민원이력
+   ========================================================= */
+function populateTypeSelects(){
+  const types = Types.all();
+  const optionsHtml = '<option value="">전체</option>' + types.map(t=>`<option>${esc(t.name)}</option>`).join('');
+  document.getElementById('f_type').innerHTML = optionsHtml;
+  document.getElementById('c_type').innerHTML = types.map(t=>`<option>${esc(t.name)}</option>`).join('') || '<option value="">(등록된 유형 없음)</option>';
+}
+
+function populateTargetDetailFilter(){
+  const type = document.getElementById('f_targetType').value;
+  const sel = document.getElementById('f_targetDetail');
+  if(type==='세대'){
+    sel.innerHTML = '<option value="">전체</option>' + Households.dongs().map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  }else if(type==='공용부'){
+    sel.innerHTML = '<option value="">전체</option>' + CommonAreas.all().map(a=>`<option value="${a.id}">[${esc(a.category)}] ${esc(a.name)}</option>`).join('');
+  }else{
+    sel.innerHTML = '<option value="">전체</option>';
+  }
+}
+document.getElementById('f_targetType').addEventListener('change', ()=>{populateTargetDetailFilter(); renderComplaints();});
+
+function getFilteredComplaints(){
+  const type = document.getElementById('f_type').value;
+  const start = document.getElementById('f_start').value;
+  const end = document.getElementById('f_end').value;
+  const targetType = document.getElementById('f_targetType').value;
+  const targetDetail = document.getElementById('f_targetDetail').value;
+  const status = document.getElementById('f_status').value;
+  const handler = document.getElementById('f_handler').value.trim();
+
+  return Complaints.all().filter(c=>{
+    if(type && c.type!==type) return false;
+    if(start && (c.datetime||'').slice(0,10) < start) return false;
+    if(end && (c.datetime||'').slice(0,10) > end) return false;
+    if(targetType && c.targetType!==targetType) return false;
+    if(targetType==='세대' && targetDetail && c.targetDong!==targetDetail) return false;
+    if(targetType==='공용부' && targetDetail && c.targetAreaId!==targetDetail) return false;
+    if(status && c.status!==status) return false;
+    if(handler && !(c.handler||'').includes(handler)) return false;
+    return true;
+  }).sort((a,b)=>(b.datetime||'').localeCompare(a.datetime||''));
+}
+
+function renderComplaints(){
+  populateTypeSelects();
+  if(!document.getElementById('f_targetDetail').dataset.init){
+    populateTargetDetailFilter();
+    document.getElementById('f_targetDetail').dataset.init='1';
+  }
+  const list = getFilteredComplaints();
+  document.getElementById('complaintCountPill').textContent = list.length.toLocaleString()+'건';
+  document.getElementById('complaintsBody').innerHTML = list.length ? list.map(c=>`
+    <tr class="clickable" data-id="${c.id}">
+      <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${c.id}"></td>
+      <td>${fmtDateTime(c.datetime)}</td>
+      <td>${esc(c.type)}</td>
+      <td>${targetLabel(c)}</td>
+      <td>${esc(c.reporter||'-')}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${esc(c.handler||'-')}</td>
+      <td>${fmtCost(c.cost)}</td>
+      <td><button class="btn small ghost openComplaintBtn" data-id="${c.id}">보기</button></td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="9">조건에 맞는 민원이 없습니다.</td></tr>`;
+
+  document.querySelectorAll('.openComplaintBtn').forEach(b=>{
+    b.addEventListener('click', (e)=>{ e.stopPropagation(); openComplaintDialog(b.dataset.id); });
+  });
+  document.querySelectorAll('#complaintsBody tr.clickable').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{ if(e.target.closest('input[type=checkbox]')) return; openComplaintDialog(tr.dataset.id); });
+  });
+  bindSelection({containerId:'complaintsBody', selectAllId:'complaintsSelectAll', bulkBtnId:'bulkDeleteComplaintsBtn', set:Selection.complaints, ids:list.map(c=>c.id)});
+}
+['f_type','f_start','f_end','f_status','f_handler'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderComplaints);
+  document.getElementById(id).addEventListener('change', renderComplaints);
+});
+document.getElementById('f_targetDetail').addEventListener('change', renderComplaints);
+document.getElementById('resetFilterBtn').addEventListener('click', ()=>{
+  ['f_type','f_start','f_end','f_targetType','f_status'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f_handler').value='';
+  populateTargetDetailFilter();
+  renderComplaints();
+});
+
+document.getElementById('exportComplaintsBtn').addEventListener('click', ()=>{
+  const list = getFilteredComplaints();
+  const rows = list.map(c=>({
+    민원일시:c.datetime, 민원유형:c.type, 대상구분:c.targetType,
+    대상:targetLabel(c).replace(/<[^>]+>/g,''), 민원인:c.reporter,
+    민원내용:c.content, 민원상태:c.status, 처리자:c.handler,
+    처리일시:c.handledAt, 처리비용:c.cost, 비고:c.memo
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '민원이력');
+  XLSX.writeFile(wb, `민원이력_${todayStr()}.xlsx`);
+});
+
+/* 민원 등록/수정 다이얼로그 */
+const complaintDialog = document.getElementById('complaintDialog');
+let editingComplaintId = null;
+
+function fillTargetDongOptions(){
+  const sel = document.getElementById('c_targetDong');
+  sel.innerHTML = Households.dongs().map(d=>`<option>${esc(d)}</option>`).join('');
+}
+function fillTargetHoOptions(){
+  const dong = document.getElementById('c_targetDong').value;
+  document.getElementById('c_targetHo').innerHTML = Households.hosByDong(dong).map(h=>`<option>${esc(h)}</option>`).join('');
+}
+function fillTargetAreaOptions(){
+  const sel = document.getElementById('c_targetArea');
+  sel.innerHTML = CommonAreas.all().map(a=>`<option value="${a.id}">[${esc(a.category)}] ${esc(a.name)}</option>`).join('');
+}
+document.getElementById('c_targetDong').addEventListener('change', fillTargetHoOptions);
+document.getElementById('c_targetType').addEventListener('change', ()=>{
+  const t = document.getElementById('c_targetType').value;
+  document.getElementById('c_targetDongWrap').classList.toggle('hidden', t!=='세대');
+  document.getElementById('c_targetHoWrap').classList.toggle('hidden', t!=='세대');
+  document.getElementById('c_targetAreaWrap').classList.toggle('hidden', t!=='공용부');
+});
+
+function openComplaintDialog(id){
+  editingComplaintId = id || null;
+  fillTargetDongOptions(); fillTargetAreaOptions();
+  document.getElementById('complaintError').classList.add('hidden');
+  const readOnly = !isAdmin();
+
+  if(id){
+    const c = Complaints.all().find(x=>x.id===id);
+    document.getElementById('complaintDialogTitle').textContent = readOnly ? '민원 상세' : '민원 수정';
+    document.getElementById('c_type').value = c.type;
+    document.getElementById('c_datetime').value = c.datetime||'';
+    document.getElementById('c_targetType').value = c.targetType;
+    document.getElementById('c_targetType').dispatchEvent(new Event('change'));
+    if(c.targetType==='세대'){
+      document.getElementById('c_targetDong').value = c.targetDong;
+      fillTargetHoOptions();
+      document.getElementById('c_targetHo').value = c.targetHo;
+    }else if(c.targetType==='공용부'){
+      document.getElementById('c_targetArea').value = c.targetAreaId;
+    }
+    document.getElementById('c_reporter').value = c.reporter||'';
+    document.getElementById('c_status').value = c.status;
+    document.getElementById('c_content').value = c.content||'';
+    document.getElementById('c_handler').value = c.handler||'';
+    document.getElementById('c_handledAt').value = c.handledAt||'';
+    document.getElementById('c_cost').value = c.cost||'';
+    document.getElementById('c_memo').value = c.memo||'';
+    document.getElementById('deleteComplaintBtn').classList.toggle('hidden', readOnly);
+  }else{
+    document.getElementById('complaintDialogTitle').textContent = '민원 등록';
+    document.getElementById('c_datetime').value = nowLocalInput();
+    document.getElementById('c_targetType').value = '세대';
+    document.getElementById('c_targetType').dispatchEvent(new Event('change'));
+    fillTargetHoOptions();
+    document.getElementById('c_reporter').value = '';
+    document.getElementById('c_status').value = '접수';
+    document.getElementById('c_content').value = '';
+    document.getElementById('c_handler').value = '';
+    document.getElementById('c_handledAt').value = '';
+    document.getElementById('c_cost').value = '';
+    document.getElementById('c_memo').value = '';
+    document.getElementById('deleteComplaintBtn').classList.add('hidden');
+  }
+
+  complaintDialog.querySelectorAll('input,select,textarea').forEach(el=>el.disabled = readOnly);
+  document.getElementById('complaintSaveBtn').classList.toggle('hidden', readOnly);
+  complaintDialog.showModal();
+}
+document.getElementById('addComplaintBtn').addEventListener('click', ()=>openComplaintDialog(null));
+document.getElementById('complaintCancelBtn').addEventListener('click', ()=>complaintDialog.close());
+document.getElementById('complaintSaveBtn').addEventListener('click', ()=>{
+  const type = document.getElementById('c_type').value;
+  const datetime = document.getElementById('c_datetime').value;
+  if(!type || !datetime){
+    const err = document.getElementById('complaintError');
+    err.textContent = '민원유형과 민원일시는 필수입니다.'; err.classList.remove('hidden');
+    return;
+  }
+  const targetType = document.getElementById('c_targetType').value;
+  const payload = {
+    type, datetime, targetType,
+    targetDong: targetType==='세대' ? document.getElementById('c_targetDong').value : null,
+    targetHo: targetType==='세대' ? document.getElementById('c_targetHo').value : null,
+    targetAreaId: targetType==='공용부' ? document.getElementById('c_targetArea').value : null,
+    targetAreaCategory: targetType==='공용부' ? (CommonAreas.all().find(a=>a.id===document.getElementById('c_targetArea').value)||{}).category : null,
+    targetAreaName: targetType==='공용부' ? (CommonAreas.all().find(a=>a.id===document.getElementById('c_targetArea').value)||{}).name : null,
+    reporter: document.getElementById('c_reporter').value.trim(),
+    status: document.getElementById('c_status').value,
+    content: document.getElementById('c_content').value.trim(),
+    handler: document.getElementById('c_handler').value.trim(),
+    handledAt: document.getElementById('c_handledAt').value,
+    cost: Number(document.getElementById('c_cost').value)||0,
+    memo: document.getElementById('c_memo').value.trim()
+  };
+  if(editingComplaintId){ Complaints.update(editingComplaintId, payload); toast('민원이 수정되었습니다.'); }
+  else{ Complaints.add(payload); toast('민원이 등록되었습니다.'); }
+  complaintDialog.close();
+  renderComplaints(); renderDashboard();
+});
+document.getElementById('deleteComplaintBtn').addEventListener('click', ()=>{
+  if(!editingComplaintId) return;
+  if(!confirm('이 민원을 삭제하시겠습니까?')) return;
+  Complaints.remove(editingComplaintId);
+  complaintDialog.close();
+  toast('민원이 삭제되었습니다.');
+  renderComplaints(); renderDashboard();
+});
+document.getElementById('bulkDeleteComplaintsBtn').addEventListener('click', ()=>{
+  if(!Selection.complaints.size) return;
+  if(!confirm(`선택한 ${Selection.complaints.size}건의 민원을 삭제하시겠습니까?`)) return;
+  const ids = new Set(Selection.complaints);
+  Complaints.save(Complaints.all().filter(c=>!ids.has(c.id)));
+  Selection.complaints.clear();
+  toast('선택한 민원이 삭제되었습니다.');
+  renderComplaints(); renderDashboard();
+});
+
+/* =========================================================
+   8. 동·호수관리
+   ========================================================= */
+function renderHouseholds(){
+  const dongSel = document.getElementById('hh_f_dong');
+  if(!dongSel.dataset.init){
+    dongSel.innerHTML = '<option value="">전체</option>' + Households.dongs().map(d=>`<option>${esc(d)}</option>`).join('');
+    dongSel.dataset.init='1';
+  }
+  const dongFilter = dongSel.value;
+  const hoFilter = document.getElementById('hh_f_ho').value.trim();
+  let list = Households.all().sort((a,b)=>(a.seq||0)-(b.seq||0));
+  if(dongFilter) list = list.filter(h=>h.dong===dongFilter);
+  if(hoFilter) list = list.filter(h=>h.ho.includes(hoFilter));
+
+  document.getElementById('hhCountPill').textContent = list.length.toLocaleString()+'세대 (전체 '+Households.all().length.toLocaleString()+'세대)';
+  document.getElementById('householdsBody').innerHTML = list.length ? list.map(h=>`
+    <tr>
+      <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${h.id}"></td>
+      <td>${h.seq}</td><td>${esc(h.dong)}</td><td>${esc(h.ho)}</td><td>${esc(h.regDate)}</td>
+      <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" data-id="${h.id}" onclick="removeHousehold('${h.id}')">삭제</button></td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="6">등록된 세대가 없습니다.</td></tr>`;
+  bindSelection({containerId:'householdsBody', selectAllId:'householdsSelectAll', bulkBtnId:'bulkDeleteHouseholdsBtn', set:Selection.households, ids:list.map(h=>h.id)});
+}
+document.getElementById('hh_f_dong').addEventListener('change', renderHouseholds);
+document.getElementById('hh_f_ho').addEventListener('input', renderHouseholds);
+
+function removeHousehold(id){
+  if(!isAdmin()) return;
+  if(!confirm('이 세대를 삭제하시겠습니까?')) return;
+  Households.remove(id);
+  toast('삭제되었습니다.');
+  renderHouseholds(); renderDashboard();
+}
+document.getElementById('bulkDeleteHouseholdsBtn').addEventListener('click', ()=>{
+  if(!Selection.households.size) return;
+  if(!confirm(`선택한 ${Selection.households.size}세대를 삭제하시겠습니까?`)) return;
+  const ids = new Set(Selection.households);
+  Households.save(Households.all().filter(h=>!ids.has(h.id)));
+  Selection.households.clear();
+  document.getElementById('hh_f_dong').dataset.init='';
+  toast('선택한 세대가 삭제되었습니다.');
+  renderHouseholds(); renderDashboard();
+});
+
+const householdDialog = document.getElementById('householdDialog');
+document.getElementById('addHouseholdBtn').addEventListener('click', ()=>{
+  document.getElementById('h_dong').value=''; document.getElementById('h_ho').value='';
+  document.getElementById('householdError').classList.add('hidden');
+  householdDialog.showModal();
+});
+document.getElementById('householdCancelBtn').addEventListener('click', ()=>householdDialog.close());
+document.getElementById('householdSaveBtn').addEventListener('click', ()=>{
+  const dong = document.getElementById('h_dong').value.trim();
+  const ho = document.getElementById('h_ho').value.trim();
+  const err = document.getElementById('householdError');
+  if(!dong || !ho){ err.textContent='동, 호수를 모두 입력하세요.'; err.classList.remove('hidden'); return; }
+  const r = Households.add(dong, ho);
+  if(!r.ok){ err.textContent='이미 등록된 세대입니다.'; err.classList.remove('hidden'); return; }
+  householdDialog.close();
+  toast('세대가 등록되었습니다.');
+  document.getElementById('hh_f_dong').dataset.init='';
+  renderHouseholds(); renderDashboard();
+});
+
+/* 엑셀 일괄등록 */
+const bulkDialog = document.getElementById('bulkDialog');
+document.getElementById('bulkUploadBtn').addEventListener('click', ()=>{
+  document.getElementById('bulkResult').textContent='';
+  document.getElementById('bulkFileInput').value='';
+  bulkDialog.showModal();
+});
+document.getElementById('bulkCancelBtn').addEventListener('click', ()=>{ bulkDialog.close(); renderHouseholds(); renderDashboard(); });
+
+document.getElementById('bulkFileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const mode = document.getElementById('bulkMode').value;
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const wb = XLSX.read(evt.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!rows.length) throw new Error('empty');
+
+      const findKey = (row, candidates)=>Object.keys(row).find(k=>candidates.includes(k.toString().trim()));
+      const sample = rows[0];
+      const dongKey = findKey(sample, ['동']);
+      const hoKey = findKey(sample, ['호','호수']);
+      if(!dongKey || !hoKey) throw new Error('컬럼 없음: "동", "호(호수)" 헤더를 확인하세요.');
+
+      let list = mode==='replace' ? [] : Households.all();
+      let added=0, skipped=0, seq = list.length ? Math.max(...list.map(h=>h.seq||0))+1 : 1;
+      rows.forEach(row=>{
+        const dong = String(row[dongKey]).trim();
+        const ho = String(row[hoKey]).trim();
+        if(!dong || !ho) return;
+        if(list.some(h=>h.dong===dong && h.ho===ho)){ skipped++; return; }
+        list.push({id:uid(), seq:seq++, dong, ho, regDate:todayStr()});
+        added++;
+      });
+      Households.save(list);
+      document.getElementById('bulkResult').innerHTML = `✅ 등록 완료 — 추가 <b>${added}</b>건, 중복 건너뜀 <b>${skipped}</b>건, 현재 총 <b>${list.length}</b>세대`;
+      toast('일괄등록이 완료되었습니다.');
+      document.getElementById('hh_f_dong').dataset.init='';
+      renderHouseholds(); renderDashboard();
+    }catch(err){
+      document.getElementById('bulkResult').innerHTML = `<span style="color:var(--critical);">업로드 실패: ${esc(err.message||err)}</span>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+/* =========================================================
+   9. 공용부관리
+   ========================================================= */
+function renderCommonAreas(){
+  const list = [...CommonAreas.all()].sort((a,b)=>a.category.localeCompare(b.category,'ko')||a.name.localeCompare(b.name,'ko',{numeric:true}));
+  document.getElementById('caCountPill').textContent = list.length.toLocaleString()+'건';
+  document.getElementById('commonAreasBody').innerHTML = list.length ? list.map(a=>`
+    <tr>
+      <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${a.id}"></td>
+      <td><span class="pill">${esc(a.category)}</span></td><td>${esc(a.name)}</td><td>${esc(a.regDate)}</td>
+      <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeCommonArea('${a.id}')">삭제</button></td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="5">등록된 공용부가 없습니다.</td></tr>`;
+  bindSelection({containerId:'commonAreasBody', selectAllId:'commonAreasSelectAll', bulkBtnId:'bulkDeleteCommonAreasBtn', set:Selection.commonAreas, ids:list.map(a=>a.id)});
+}
+function removeCommonArea(id){
+  if(!isAdmin()) return;
+  if(!confirm('이 공용부를 삭제하시겠습니까?')) return;
+  CommonAreas.remove(id);
+  toast('삭제되었습니다.');
+  renderCommonAreas(); renderDashboard();
+}
+document.getElementById('bulkDeleteCommonAreasBtn').addEventListener('click', ()=>{
+  if(!Selection.commonAreas.size) return;
+  if(!confirm(`선택한 ${Selection.commonAreas.size}건의 공용부를 삭제하시겠습니까?`)) return;
+  const ids = new Set(Selection.commonAreas);
+  CommonAreas.save(CommonAreas.all().filter(a=>!ids.has(a.id)));
+  Selection.commonAreas.clear();
+  toast('선택한 공용부가 삭제되었습니다.');
+  renderCommonAreas(); renderDashboard();
+});
+const commonAreaDialog = document.getElementById('commonAreaDialog');
+document.getElementById('addCommonAreaBtn').addEventListener('click', ()=>{
+  document.getElementById('ca_name').value='';
+  document.getElementById('commonAreaError').classList.add('hidden');
+  commonAreaDialog.showModal();
+});
+document.getElementById('commonAreaCancelBtn').addEventListener('click', ()=>commonAreaDialog.close());
+document.getElementById('commonAreaSaveBtn').addEventListener('click', ()=>{
+  const category = document.getElementById('ca_category').value;
+  const name = document.getElementById('ca_name').value.trim();
+  const err = document.getElementById('commonAreaError');
+  if(!name){ err.textContent='명칭을 입력하세요.'; err.classList.remove('hidden'); return; }
+  CommonAreas.add(category, name);
+  commonAreaDialog.close();
+  toast('공용부가 등록되었습니다.');
+  renderCommonAreas(); renderDashboard();
+});
+
+/* =========================================================
+   10. 민원유형관리
+   ========================================================= */
+function renderTypes(){
+  const list = [...Types.all()].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  document.getElementById('typeCountPill').textContent = list.length.toLocaleString()+'건';
+  document.getElementById('typesBody').innerHTML = list.length ? list.map(t=>`
+    <tr>
+      <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${t.id}"></td>
+      <td>${esc(t.name)}</td><td>${esc(t.regDate)}</td>
+      <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeType('${t.id}')">삭제</button></td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="4">등록된 민원유형이 없습니다.</td></tr>`;
+  bindSelection({containerId:'typesBody', selectAllId:'typesSelectAll', bulkBtnId:'bulkDeleteTypesBtn', set:Selection.types, ids:list.map(t=>t.id)});
+}
+function removeType(id){
+  if(!isAdmin()) return;
+  if(!confirm('이 민원유형을 삭제하시겠습니까?')) return;
+  Types.remove(id);
+  toast('삭제되었습니다.');
+  renderTypes();
+}
+document.getElementById('bulkDeleteTypesBtn').addEventListener('click', ()=>{
+  if(!Selection.types.size) return;
+  if(!confirm(`선택한 ${Selection.types.size}건의 민원유형을 삭제하시겠습니까?`)) return;
+  const ids = new Set(Selection.types);
+  Types.save(Types.all().filter(t=>!ids.has(t.id)));
+  Selection.types.clear();
+  toast('선택한 민원유형이 삭제되었습니다.');
+  renderTypes();
+});
+const typeDialog = document.getElementById('typeDialog');
+document.getElementById('addTypeBtn').addEventListener('click', ()=>{
+  document.getElementById('t_name').value='';
+  document.getElementById('typeError').classList.add('hidden');
+  typeDialog.showModal();
+});
+document.getElementById('typeCancelBtn').addEventListener('click', ()=>typeDialog.close());
+document.getElementById('typeSaveBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('t_name').value.trim();
+  const err = document.getElementById('typeError');
+  if(!name){ err.textContent='유형명을 입력하세요.'; err.classList.remove('hidden'); return; }
+  const r = Types.add(name);
+  if(!r.ok){ err.textContent='이미 등록된 유형입니다.'; err.classList.remove('hidden'); return; }
+  typeDialog.close();
+  toast('민원유형이 등록되었습니다.');
+  renderTypes();
+});
+
+/* =========================================================
+   11. 백업 / 복원
+   ========================================================= */
+function renderBackup(){
+  const households = Households.all(), complaints = Complaints.all(), commonAreas = CommonAreas.all(), types = Types.all();
+  document.getElementById('backupStatGrid').innerHTML = [
+    {label:'세대', value:households.length}, {label:'공용부', value:commonAreas.length},
+    {label:'민원유형', value:types.length}, {label:'민원이력', value:complaints.length}
+  ].map(s=>`<div class="statTile"><div class="label">${s.label}</div><div class="value">${s.value.toLocaleString()}</div></div>`).join('');
+}
+document.getElementById('exportBackupBtn').addEventListener('click', ()=>{
+  const data = {
+    exportedAt: new Date().toISOString(),
+    households: Households.all(), commonAreas: CommonAreas.all(),
+    types: Types.all(), complaints: Complaints.all()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `민원관리_백업_${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('백업 파일을 다운로드했습니다.');
+});
+document.getElementById('restoreFileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  if(!confirm('현재 데이터를 백업 파일 내용으로 덮어씁니다. 계속하시겠습니까?')){ e.target.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const data = JSON.parse(evt.target.result);
+      if(data.households) Households.save(data.households);
+      if(data.commonAreas) CommonAreas.save(data.commonAreas);
+      if(data.types) Types.save(data.types);
+      if(data.complaints) Complaints.save(data.complaints);
+      toast('데이터를 복원했습니다.');
+      document.getElementById('hh_f_dong').dataset.init='';
+      document.getElementById('f_targetDetail').dataset.init='';
+      renderBackup(); renderDashboard();
+    }catch(err){
+      alert('복원 실패: 올바른 백업 파일이 아닙니다.');
+    }
+    e.target.value='';
+  };
+  reader.readAsText(file);
+});
+
+/* =========================================================
+   12. 관리자 로그인 / 로그아웃 / 비밀번호 변경
+   ========================================================= */
+const loginDialog = document.getElementById('loginDialog');
+document.getElementById('loginBtn').addEventListener('click', ()=>{
+  document.getElementById('loginPw').value='';
+  document.getElementById('loginError').classList.add('hidden');
+  loginDialog.showModal();
+  setTimeout(()=>document.getElementById('loginPw').focus(), 50);
+});
+document.getElementById('loginCancelBtn').addEventListener('click', ()=>loginDialog.close());
+function attemptLogin(){
+  const pw = document.getElementById('loginPw').value;
+  const stored = DB.get(DB.KEYS.adminPw, DEFAULT_ADMIN_PW);
+  if(pw === stored){
+    setAdmin(true);
+    loginDialog.close();
+    toast('관리자로 로그인했습니다.');
+    showView(currentViewName());
+  }else{
+    document.getElementById('loginError').classList.remove('hidden');
+  }
+}
+document.getElementById('loginSubmitBtn').addEventListener('click', attemptLogin);
+document.getElementById('loginPw').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); attemptLogin(); } });
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  setAdmin(false);
+  toast('로그아웃되었습니다.');
+  showView(currentViewName());
+});
+function currentViewName(){
+  const active = document.querySelector('.navBtn.active');
+  return active ? active.dataset.view : 'dashboard';
+}
+document.getElementById('changePwBtn').addEventListener('click', ()=>{
+  const cur = document.getElementById('pwCurrent').value;
+  const next = document.getElementById('pwNew').value;
+  const err = document.getElementById('pwChangeError');
+  const stored = DB.get(DB.KEYS.adminPw, DEFAULT_ADMIN_PW);
+  if(cur !== stored){ err.textContent='현재 비밀번호가 올바르지 않습니다.'; err.classList.remove('hidden'); return; }
+  if(!next || next.length < 4){ err.textContent='새 비밀번호는 4자 이상이어야 합니다.'; err.classList.remove('hidden'); return; }
+  DB.set(DB.KEYS.adminPw, next);
+  err.classList.add('hidden');
+  document.getElementById('pwCurrent').value=''; document.getElementById('pwNew').value='';
+  toast('비밀번호가 변경되었습니다.');
+});
+
+/* =========================================================
+   13. 초기 실행
+   ========================================================= */
+initData();
+refreshAuthUI();
+showView('dashboard');
+</script>
+</body>
+</html>
