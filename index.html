@@ -196,11 +196,21 @@
 
   @media (max-width:860px){
     .app{flex-direction:column;}
-    .sidebar{width:100%;flex:none;height:auto;position:relative;flex-direction:row;flex-wrap:wrap;align-items:center;}
-    .brand{border-bottom:none;border-right:1px solid var(--gridline);padding:14px 16px;}
-    nav.mainNav{display:flex;overflow-x:auto;padding:8px;flex:1;}
-    .navBtn{width:auto;white-space:nowrap;}
-    .authBox{border-top:none;border-left:1px solid var(--gridline);padding:10px 14px;}
+    .sidebar{
+      width:100%;flex:none;height:auto;position:relative;
+      flex-direction:row;flex-wrap:wrap;align-items:center;
+      justify-content:space-between;
+    }
+    .brand{border-bottom:none;border-right:none;padding:14px 16px;order:1;}
+    .authBox{border-top:none;border-left:none;padding:10px 14px;order:2;}
+    nav.mainNav{
+      order:3;flex:0 0 100%;width:100%;
+      display:flex;flex-wrap:wrap;gap:6px;
+      overflow-x:visible;overflow-y:visible;
+      padding:8px 12px 12px;
+      border-top:1px solid var(--gridline);
+    }
+    .navBtn{width:auto;white-space:nowrap;padding:8px 12px;margin-bottom:0;}
     .content{padding:18px 16px 50px;}
   }
 </style>
@@ -498,10 +508,8 @@
     <h3>공용부 등록</h3>
     <div class="formGrid">
       <div class="field"><label>구분</label>
-        <select id="ca_category">
-          <option>주차장</option><option>화단/조경</option><option>놀이터</option>
-          <option>커뮤니티</option><option>아파트 각 동</option><option>기타</option>
-        </select>
+        <input type="text" id="ca_category" list="ca_category_list" placeholder="예: 주차장 (기존 구분 선택 또는 새 구분 입력)">
+        <datalist id="ca_category_list"></datalist>
       </div>
       <div class="field"><label>명칭</label><input type="text" id="ca_name" placeholder="예: 지하주차장 B2"></div>
     </div>
@@ -915,7 +923,7 @@ function targetLabel(c){
    7. 민원이력
    ========================================================= */
 function populateTypeSelects(){
-  const types = Types.all();
+  const types = [...Types.all()].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   const optionsHtml = '<option value="">전체</option>' + types.map(t=>`<option>${esc(t.name)}</option>`).join('');
   document.getElementById('f_type').innerHTML = optionsHtml;
   document.getElementById('c_type').innerHTML = types.map(t=>`<option>${esc(t.name)}</option>`).join('') || '<option value="">(등록된 유형 없음)</option>';
@@ -1148,15 +1156,15 @@ function renderHouseholds(){
   }
   const dongFilter = dongSel.value;
   const hoFilter = document.getElementById('hh_f_ho').value.trim();
-  let list = Households.all().sort((a,b)=>(a.seq||0)-(b.seq||0));
+  let list = Households.all().sort((a,b)=> a.dong.localeCompare(b.dong,'ko',{numeric:true}) || a.ho.localeCompare(b.ho,'ko',{numeric:true}));
   if(dongFilter) list = list.filter(h=>h.dong===dongFilter);
   if(hoFilter) list = list.filter(h=>h.ho.includes(hoFilter));
 
   document.getElementById('hhCountPill').textContent = list.length.toLocaleString()+'세대 (전체 '+Households.all().length.toLocaleString()+'세대)';
-  document.getElementById('householdsBody').innerHTML = list.length ? list.map(h=>`
+  document.getElementById('householdsBody').innerHTML = list.length ? list.map((h,i)=>`
     <tr>
       <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${h.id}"></td>
-      <td>${h.seq}</td><td>${esc(h.dong)}</td><td>${esc(h.ho)}</td><td>${esc(h.regDate)}</td>
+      <td>${i+1}</td><td>${esc(h.dong)}</td><td>${esc(h.ho)}</td><td>${esc(h.regDate)}</td>
       <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" data-id="${h.id}" onclick="removeHousehold('${h.id}')">삭제</button></td>
     </tr>`).join('') : `<tr class="emptyRow"><td colspan="6">등록된 세대가 없습니다.</td></tr>`;
   bindSelection({containerId:'householdsBody', selectAllId:'householdsSelectAll', bulkBtnId:'bulkDeleteHouseholdsBtn', set:Selection.households, ids:list.map(h=>h.id)});
@@ -1291,17 +1299,26 @@ document.getElementById('bulkDeleteCommonAreasBtn').addEventListener('click', as
   toast('선택한 공용부가 삭제되었습니다.');
   renderCommonAreas(); renderDashboard();
 });
+const DEFAULT_CA_CATEGORIES = ['주차장','화단/조경','놀이터','커뮤니티','아파트 각 동','기타'];
+function populateCaCategoryList(){
+  const existing = [...new Set(CommonAreas.all().map(a=>a.category))];
+  const merged = [...new Set([...DEFAULT_CA_CATEGORIES, ...existing])].sort((a,b)=>a.localeCompare(b,'ko'));
+  document.getElementById('ca_category_list').innerHTML = merged.map(c=>`<option value="${esc(c)}"></option>`).join('');
+}
 const commonAreaDialog = document.getElementById('commonAreaDialog');
 document.getElementById('addCommonAreaBtn').addEventListener('click', ()=>{
+  document.getElementById('ca_category').value='';
   document.getElementById('ca_name').value='';
   document.getElementById('commonAreaError').classList.add('hidden');
+  populateCaCategoryList();
   commonAreaDialog.showModal();
 });
 document.getElementById('commonAreaCancelBtn').addEventListener('click', ()=>commonAreaDialog.close());
 document.getElementById('commonAreaSaveBtn').addEventListener('click', async ()=>{
-  const category = document.getElementById('ca_category').value;
+  const category = document.getElementById('ca_category').value.trim();
   const name = document.getElementById('ca_name').value.trim();
   const err = document.getElementById('commonAreaError');
+  if(!category){ err.textContent='구분을 입력하세요.'; err.classList.remove('hidden'); return; }
   if(!name){ err.textContent='명칭을 입력하세요.'; err.classList.remove('hidden'); return; }
   await CommonAreas.add(category, name);
   commonAreaDialog.close();
