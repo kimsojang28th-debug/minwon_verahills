@@ -346,7 +346,7 @@
     <!-- COMMON AREAS -->
     <section id="view-commonareas" class="view">
       <div class="pageHead">
-        <div><h1>공용부관리</h1><div class="desc">공용부(주차장, 화단/조경, 놀이터, 커뮤니티, 아파트 각 동, 기타)를 등록·삭제합니다.</div></div>
+        <div><h1>공용부관리</h1><div class="desc">공용부(주차장, 화단/조경, 놀이터, 커뮤니티, 각 동, 기타)를 등록·삭제합니다.</div></div>
         <button class="btn primary adminOnly hidden" id="addCommonAreaBtn">+ 공용부 등록</button>
       </div>
       <div class="card">
@@ -472,8 +472,8 @@
   <div class="dialogBody">
     <h3>세대 등록</h3>
     <div class="formGrid">
-      <div class="field"><label>동</label><input type="text" id="h_dong" placeholder="예: 201동"></div>
-      <div class="field"><label>호수</label><input type="text" id="h_ho" placeholder="예: 1203호"></div>
+      <div class="field"><label>동</label><input type="text" id="h_dong" placeholder="예: 201동 (201만 입력해도 자동 추가)"></div>
+      <div class="field"><label>호수</label><input type="text" id="h_ho" placeholder="예: 1203호 (1203만 입력해도 자동 추가)"></div>
     </div>
     <div class="errorMsg hidden" id="householdError"></div>
     <div class="dialogActions">
@@ -530,6 +530,23 @@
     <div class="dialogActions">
       <button class="btn" id="typeCancelBtn" type="button">취소</button>
       <button class="btn primary" id="typeSaveBtn" type="button">저장</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ITEM COMPLAINTS DIALOG -->
+<dialog id="itemComplaintsDialog" style="width:min(760px,94vw);">
+  <div class="dialogBody">
+    <h3 id="itemComplaintsTitle">민원이력</h3>
+    <div style="margin-bottom:10px;"><span class="pill" id="itemComplaintsCountPill">0건</span></div>
+    <div class="tableWrap" style="max-height:56vh;overflow-y:auto;">
+      <table>
+        <thead><tr><th>민원일시</th><th>유형</th><th>상태</th><th>민원내용</th><th></th></tr></thead>
+        <tbody id="itemComplaintsBody"></tbody>
+      </table>
+    </div>
+    <div class="dialogActions">
+      <button class="btn primary" id="itemComplaintsCloseBtn" type="button">닫기</button>
     </div>
   </div>
 </dialog>
@@ -703,6 +720,7 @@ FB.onAuthStateChanged(auth, (user)=>{
   clearAllSelections();
   refreshAuthUI();
   maybeSeed();
+  migrateLegacyCategoryLabels();
   onDataChange();
 });
 
@@ -722,7 +740,7 @@ async function maybeSeed(){
       const dongs = [...new Set(SEED_HOUSEHOLDS.map(r=>r[1]))].sort();
       const caItems = [];
       ['주차장','화단/조경','놀이터','커뮤니티'].forEach(cat=>caItems.push({category:cat, name:cat, regDate:todayStr()}));
-      dongs.forEach(d=>caItems.push({category:'아파트 각 동', name:d, regDate:todayStr()}));
+      dongs.forEach(d=>caItems.push({category:'각 동', name:d, regDate:todayStr()}));
       caItems.push({category:'기타', name:'기타', regDate:todayStr()});
       await CommonAreas.bulkAdd(caItems);
     }
@@ -733,6 +751,24 @@ async function maybeSeed(){
   }catch(err){
     console.error('초기 데이터 등록 실패', err);
     seedAttempted = false;
+  }
+}
+
+// "아파트 각 동" 구분 라벨을 "각 동"으로 짧게 바꾼 업데이트 이후, 이미 저장돼 있던
+// 예전 라벨의 공용부 데이터를 관리자가 처음 접속했을 때 1회 자동으로 정리합니다.
+let categoryMigrationAttempted = false;
+async function migrateLegacyCategoryLabels(){
+  if(categoryMigrationAttempted) return;
+  if(!authReady || !CommonAreas._ready) return;
+  if(!isAdmin()) return;
+  const legacy = CommonAreas.all().filter(a=>a.category==='아파트 각 동');
+  if(!legacy.length) return;
+  categoryMigrationAttempted = true;
+  try{
+    await CommonAreas.bulkSet(legacy.map(a=>({...a, category:'각 동'})));
+  }catch(err){
+    console.error('구분 라벨 정리 실패', err);
+    categoryMigrationAttempted = false;
   }
 }
 
@@ -775,6 +811,48 @@ function statusBadge(status){
 
 /* 4. 데이터 접근 헬퍼(Households/CommonAreas/Types/Complaints)는
       위 "1. Firebase 연결 및 저장소 계층"에서 정의됩니다. */
+
+/* 동·호수관리 / 공용부관리 / 민원유형관리 각 행의 "민원이력" 버튼 —
+   해당 항목과 관련된 민원만 민원일시 내림차순(최신순)으로 보여줍니다. */
+const itemComplaintsDialog = document.getElementById('itemComplaintsDialog');
+function openItemComplaintsDialog(title, list){
+  document.getElementById('itemComplaintsTitle').textContent = title;
+  document.getElementById('itemComplaintsCountPill').textContent = list.length.toLocaleString()+'건';
+  document.getElementById('itemComplaintsBody').innerHTML = list.length ? list.map(c=>`
+    <tr>
+      <td>${fmtDateTime(c.datetime)}</td>
+      <td>${esc(c.type)}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${esc((c.content||'').slice(0,50))}${(c.content||'').length>50?'…':''}</td>
+      <td><button class="btn small ghost itemComplaintsOpenBtn" data-id="${c.id}">보기</button></td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="5">등록된 민원이 없습니다.</td></tr>`;
+  document.querySelectorAll('.itemComplaintsOpenBtn').forEach(b=>{
+    b.addEventListener('click', ()=>openComplaintDialog(b.dataset.id));
+  });
+  itemComplaintsDialog.showModal();
+}
+document.getElementById('itemComplaintsCloseBtn').addEventListener('click', ()=>itemComplaintsDialog.close());
+function sortByDatetimeDesc(list){
+  return [...list].sort((a,b)=>(b.datetime||'').localeCompare(a.datetime||''));
+}
+function showHouseholdComplaints(id){
+  const h = Households.all().find(x=>x.id===id);
+  if(!h) return;
+  const list = sortByDatetimeDesc(Complaints.all().filter(c=>c.targetType==='세대' && c.targetDong===h.dong && c.targetHo===h.ho));
+  openItemComplaintsDialog(`${h.dong} ${h.ho} 민원이력`, list);
+}
+function showCommonAreaComplaints(id){
+  const a = CommonAreas.all().find(x=>x.id===id);
+  if(!a) return;
+  const list = sortByDatetimeDesc(Complaints.all().filter(c=>c.targetType==='공용부' && c.targetAreaId===a.id));
+  openItemComplaintsDialog(`[${a.category}] ${a.name} 민원이력`, list);
+}
+function showTypeComplaints(id){
+  const t = Types.all().find(x=>x.id===id);
+  if(!t) return;
+  const list = sortByDatetimeDesc(Complaints.all().filter(c=>c.type===t.name));
+  openItemComplaintsDialog(`${t.name} 민원이력`, list);
+}
 
 /* =========================================================
    4b. 체크박스 일괄 선택/삭제 공통 헬퍼
@@ -889,7 +967,7 @@ function renderDashboard(){
   // 동별 민원 TOP5 (단일 색상 - magnitude 인코딩)
   const dongCounts = {};
   complaints.forEach(c=>{
-    const d = c.targetType==='세대' ? c.targetDong : (c.targetType==='공용부' && c.targetAreaCategory==='아파트 각 동' ? c.targetAreaName : null);
+    const d = c.targetType==='세대' ? c.targetDong : (c.targetType==='공용부' && (c.targetAreaCategory==='각 동' || c.targetAreaCategory==='아파트 각 동') ? c.targetAreaName : null);
     if(d) dongCounts[d] = (dongCounts[d]||0)+1;
   });
   const top5 = Object.entries(dongCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
@@ -1168,7 +1246,10 @@ function renderHouseholds(){
     <tr>
       <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${h.id}"></td>
       <td>${i+1}</td><td>${esc(h.dong)}</td><td>${esc(h.ho)}</td><td>${esc(h.regDate)}</td>
-      <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" data-id="${h.id}" onclick="removeHousehold('${h.id}')">삭제</button></td>
+      <td>
+        <button class="btn small ghost" onclick="showHouseholdComplaints('${h.id}')">민원이력</button>
+        <button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" data-id="${h.id}" onclick="removeHousehold('${h.id}')">삭제</button>
+      </td>
     </tr>`).join('') : `<tr class="emptyRow"><td colspan="6">등록된 세대가 없습니다.</td></tr>`;
   bindSelection({containerId:'householdsBody', selectAllId:'householdsSelectAll', bulkBtnId:'bulkDeleteHouseholdsBtn', set:Selection.households, ids:list.map(h=>h.id)});
 }
@@ -1200,9 +1281,19 @@ document.getElementById('addHouseholdBtn').addEventListener('click', ()=>{
   householdDialog.showModal();
 });
 document.getElementById('householdCancelBtn').addEventListener('click', ()=>householdDialog.close());
+function normalizeDong(v){
+  v = (v||'').trim();
+  if(!v || v.endsWith('동')) return v;
+  return v+'동';
+}
+function normalizeHo(v){
+  v = (v||'').trim();
+  if(!v || v.endsWith('호')) return v;
+  return v+'호';
+}
 document.getElementById('householdSaveBtn').addEventListener('click', async ()=>{
-  const dong = document.getElementById('h_dong').value.trim();
-  const ho = document.getElementById('h_ho').value.trim();
+  const dong = normalizeDong(document.getElementById('h_dong').value);
+  const ho = normalizeHo(document.getElementById('h_ho').value);
   const err = document.getElementById('householdError');
   if(!dong || !ho){ err.textContent='동, 호수를 모두 입력하세요.'; err.classList.remove('hidden'); return; }
   const r = await Households.add(dong, ho);
@@ -1247,8 +1338,8 @@ document.getElementById('bulkFileInput').addEventListener('change', (e)=>{
       let added=0, skipped=0, seq = existing.length ? Math.max(...existing.map(h=>h.seq||0))+1 : 1;
       const newItems = [];
       rows.forEach(row=>{
-        const dong = String(row[dongKey]).trim();
-        const ho = String(row[hoKey]).trim();
+        const dong = normalizeDong(String(row[dongKey]));
+        const ho = normalizeHo(String(row[hoKey]));
         if(!dong || !ho) return;
         const key = dong+'|'+ho;
         if(seen.has(key)){ skipped++; return; }
@@ -1282,7 +1373,10 @@ function renderCommonAreas(){
     <tr>
       <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${a.id}"></td>
       <td><span class="pill">${esc(a.category)}</span></td><td>${esc(a.name)}</td><td>${esc(a.regDate)}</td>
-      <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeCommonArea('${a.id}')">삭제</button></td>
+      <td>
+        <button class="btn small ghost" onclick="showCommonAreaComplaints('${a.id}')">민원이력</button>
+        <button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeCommonArea('${a.id}')">삭제</button>
+      </td>
     </tr>`).join('') : `<tr class="emptyRow"><td colspan="5">등록된 공용부가 없습니다.</td></tr>`;
   bindSelection({containerId:'commonAreasBody', selectAllId:'commonAreasSelectAll', bulkBtnId:'bulkDeleteCommonAreasBtn', set:Selection.commonAreas, ids:list.map(a=>a.id)});
 }
@@ -1302,7 +1396,7 @@ document.getElementById('bulkDeleteCommonAreasBtn').addEventListener('click', as
   toast('선택한 공용부가 삭제되었습니다.');
   renderCommonAreas(); renderDashboard();
 });
-const DEFAULT_CA_CATEGORIES = ['주차장','화단/조경','놀이터','커뮤니티','아파트 각 동','기타'];
+const DEFAULT_CA_CATEGORIES = ['주차장','화단/조경','놀이터','커뮤니티','각 동','기타'];
 function populateCaCategoryList(){
   const existing = [...new Set(CommonAreas.all().map(a=>a.category))];
   const merged = [...new Set([...DEFAULT_CA_CATEGORIES, ...existing])].sort((a,b)=>a.localeCompare(b,'ko'));
@@ -1339,7 +1433,10 @@ function renderTypes(){
     <tr>
       <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${t.id}"></td>
       <td>${esc(t.name)}</td><td>${esc(t.regDate)}</td>
-      <td><button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeType('${t.id}')">삭제</button></td>
+      <td>
+        <button class="btn small ghost" onclick="showTypeComplaints('${t.id}')">민원이력</button>
+        <button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeType('${t.id}')">삭제</button>
+      </td>
     </tr>`).join('') : `<tr class="emptyRow"><td colspan="4">등록된 민원유형이 없습니다.</td></tr>`;
   bindSelection({containerId:'typesBody', selectAllId:'typesSelectAll', bulkBtnId:'bulkDeleteTypesBtn', set:Selection.types, ids:list.map(t=>t.id)});
 }
