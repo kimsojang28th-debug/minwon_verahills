@@ -233,6 +233,7 @@
       <button class="navBtn" data-view="households"><span class="navIcon">🏠</span>동·호수관리</button>
       <button class="navBtn" data-view="commonareas"><span class="navIcon">🏗️</span>공용부관리</button>
       <button class="navBtn" data-view="types"><span class="navIcon">🏷️</span>민원유형관리</button>
+      <button class="navBtn" data-view="memos"><span class="navIcon">📝</span>민원 메모</button>
       <button class="navBtn" data-view="backup"><span class="navIcon">💾</span>백업/복원</button>
     </nav>
     <div class="authBox">
@@ -387,6 +388,36 @@
       </div>
     </section>
 
+    <!-- MEMOS -->
+    <section id="view-memos" class="view">
+      <div class="pageHead">
+        <div><h1>민원 메모</h1><div class="desc">민원이력에 등록하지 못하는 메모 사항을 날짜별로 기록·검색합니다.</div></div>
+        <button class="btn primary adminOnly hidden" id="addMemoBtn">+ 메모 등록</button>
+      </div>
+      <div class="card">
+        <div class="toolRow">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="pill" id="memoCountPill">0건</span>
+            <input type="text" id="memo_search" placeholder="메모 내용 검색" style="min-width:220px;">
+          </div>
+          <div class="right">
+            <button class="btn danger small adminOnly hidden" id="bulkDeleteMemosBtn" disabled>선택 삭제</button>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead><tr>
+              <th style="width:34px;"><input type="checkbox" class="adminOnly hidden" id="memosSelectAll"></th>
+              <th style="width:110px;">날짜</th>
+              <th>메모 내용</th>
+              <th style="width:160px;"></th>
+            </tr></thead>
+            <tbody id="memosBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- BACKUP -->
     <section id="view-backup" class="view">
       <div class="pageHead">
@@ -534,6 +565,20 @@
   </div>
 </dialog>
 
+<!-- MEMO DIALOG -->
+<dialog id="memoDialog">
+  <div class="dialogBody">
+    <h3 id="memoDialogTitle">메모 등록</h3>
+    <div class="field"><label>날짜</label><input type="date" id="memo_date"></div>
+    <div class="field" style="margin-top:10px;"><label>메모 내용</label><textarea id="memo_content" rows="6" placeholder="민원 관련 메모를 입력하세요"></textarea></div>
+    <div class="errorMsg hidden" id="memoError"></div>
+    <div class="dialogActions">
+      <button class="btn" id="memoCancelBtn" type="button">취소</button>
+      <button class="btn primary" id="memoSaveBtn" type="button">저장</button>
+    </div>
+  </div>
+</dialog>
+
 <!-- ITEM COMPLAINTS DIALOG -->
 <dialog id="itemComplaintsDialog" style="width:min(760px,94vw);">
   <div class="dialogBody">
@@ -604,10 +649,11 @@ function renderAll(){
   else if(view==='households') renderHouseholds();
   else if(view==='commonareas') renderCommonAreas();
   else if(view==='types') renderTypes();
+  else if(view==='memos') renderMemos();
   else if(view==='backup') renderBackup();
 }
 function checkInitialLoadComplete(){
-  if(authReady && Households._ready && CommonAreas._ready && Types._ready && Complaints._ready){
+  if(authReady && Households._ready && CommonAreas._ready && Types._ready && Complaints._ready && Memos._ready){
     const overlay = document.getElementById('loadingOverlay');
     if(overlay) overlay.style.display = 'none';
   }
@@ -696,6 +742,11 @@ Types.add = async function(name){
 const Complaints = makeStore('complaints');
 Complaints.add = async function(item){
   await this._addRaw({...item, createdAt: new Date().toISOString()});
+};
+
+const Memos = makeStore('memos');
+Memos.add = async function(date, content){
+  await this._addRaw({date, content, regDate:todayStr()});
 };
 
 /* =========================================================
@@ -861,7 +912,8 @@ const Selection = {
   complaints: new Set(),
   households: new Set(),
   commonAreas: new Set(),
-  types: new Set()
+  types: new Set(),
+  memos: new Set()
 };
 function clearAllSelections(){
   Object.values(Selection).forEach(s=>s.clear());
@@ -924,6 +976,7 @@ function showView(name){
   if(name==='households') renderHouseholds();
   if(name==='commonareas') renderCommonAreas();
   if(name==='types') renderTypes();
+  if(name==='memos') renderMemos();
   if(name==='backup') renderBackup();
 }
 document.querySelectorAll('.navBtn').forEach(b=>{
@@ -1006,8 +1059,14 @@ function targetLabel(c){
 function populateTypeSelects(){
   const types = [...Types.all()].sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   const optionsHtml = '<option value="">전체</option>' + types.map(t=>`<option>${esc(t.name)}</option>`).join('');
-  document.getElementById('f_type').innerHTML = optionsHtml;
-  document.getElementById('c_type').innerHTML = types.map(t=>`<option>${esc(t.name)}</option>`).join('') || '<option value="">(등록된 유형 없음)</option>';
+  const fType = document.getElementById('f_type');
+  const prevFilterValue = fType.value;
+  fType.innerHTML = optionsHtml;
+  fType.value = prevFilterValue; // 목록을 새로 그릴 때 선택해둔 필터가 초기화되지 않도록 유지
+  const cType = document.getElementById('c_type');
+  const prevDialogValue = cType.value;
+  cType.innerHTML = types.map(t=>`<option>${esc(t.name)}</option>`).join('') || '<option value="">(등록된 유형 없음)</option>';
+  if(prevDialogValue) cType.value = prevDialogValue;
 }
 
 function populateTargetDetailFilter(){
@@ -1475,20 +1534,107 @@ document.getElementById('typeSaveBtn').addEventListener('click', async ()=>{
 });
 
 /* =========================================================
+   10b. 민원 메모
+   ========================================================= */
+let editingMemoId = null;
+function getFilteredMemos(){
+  const q = (document.getElementById('memo_search').value||'').trim();
+  let list = Memos.all();
+  if(q) list = list.filter(m=>(m.content||'').includes(q));
+  return list.sort((a,b)=>{
+    const ad = a.date||a.regDate||'';
+    const bd = b.date||b.regDate||'';
+    if(ad!==bd) return bd.localeCompare(ad);
+    return (b.createdAt||b.regDate||'').localeCompare(a.createdAt||a.regDate||'');
+  });
+}
+function renderMemos(){
+  const list = getFilteredMemos();
+  document.getElementById('memoCountPill').textContent = list.length.toLocaleString()+'건';
+  document.getElementById('memosBody').innerHTML = list.length ? list.map(m=>`
+    <tr>
+      <td><input type="checkbox" class="rowCheck ${isAdmin()?'':'hidden'}" data-id="${m.id}"></td>
+      <td>${esc(m.date||'-')}</td>
+      <td style="white-space:pre-wrap;">${esc(m.content||'')}</td>
+      <td>
+        <button class="btn small ghost adminOnly ${isAdmin()?'':'hidden'}" onclick="openMemoDialog('${m.id}')">수정</button>
+        <button class="btn small danger adminOnly ${isAdmin()?'':'hidden'}" onclick="removeMemo('${m.id}')">삭제</button>
+      </td>
+    </tr>`).join('') : `<tr class="emptyRow"><td colspan="4">등록된 메모가 없습니다.</td></tr>`;
+  bindSelection({containerId:'memosBody', selectAllId:'memosSelectAll', bulkBtnId:'bulkDeleteMemosBtn', set:Selection.memos, ids:list.map(m=>m.id)});
+}
+document.getElementById('memo_search').addEventListener('input', renderMemos);
+
+async function removeMemo(id){
+  if(!isAdmin()) return;
+  if(!confirm('이 메모를 삭제하시겠습니까?')) return;
+  await Memos.remove(id);
+  toast('삭제되었습니다.');
+  renderMemos();
+}
+document.getElementById('bulkDeleteMemosBtn').addEventListener('click', async ()=>{
+  if(!Selection.memos.size) return;
+  if(!confirm(`선택한 ${Selection.memos.size}건의 메모를 삭제하시겠습니까?`)) return;
+  const ids = new Set(Selection.memos);
+  await Memos.removeMany(ids);
+  Selection.memos.clear();
+  toast('선택한 메모가 삭제되었습니다.');
+  renderMemos();
+});
+
+const memoDialog = document.getElementById('memoDialog');
+function openMemoDialog(id){
+  editingMemoId = id || null;
+  const err = document.getElementById('memoError');
+  err.classList.add('hidden');
+  if(id){
+    const m = Memos.all().find(x=>x.id===id);
+    if(!m) return;
+    document.getElementById('memoDialogTitle').textContent = '메모 수정';
+    document.getElementById('memo_date').value = m.date || todayStr();
+    document.getElementById('memo_content').value = m.content || '';
+  }else{
+    document.getElementById('memoDialogTitle').textContent = '메모 등록';
+    document.getElementById('memo_date').value = todayStr();
+    document.getElementById('memo_content').value = '';
+  }
+  memoDialog.showModal();
+}
+document.getElementById('addMemoBtn').addEventListener('click', ()=>openMemoDialog(null));
+document.getElementById('memoCancelBtn').addEventListener('click', ()=>memoDialog.close());
+document.getElementById('memoSaveBtn').addEventListener('click', async ()=>{
+  const date = document.getElementById('memo_date').value;
+  const content = document.getElementById('memo_content').value.trim();
+  const err = document.getElementById('memoError');
+  if(!date){ err.textContent='날짜를 선택하세요.'; err.classList.remove('hidden'); return; }
+  if(!content){ err.textContent='메모 내용을 입력하세요.'; err.classList.remove('hidden'); return; }
+  if(editingMemoId){
+    await Memos.update(editingMemoId, {date, content});
+    toast('메모가 수정되었습니다.');
+  }else{
+    await Memos.add(date, content);
+    toast('메모가 등록되었습니다.');
+  }
+  memoDialog.close();
+  renderMemos();
+});
+
+/* =========================================================
    11. 백업 / 복원
    ========================================================= */
 function renderBackup(){
-  const households = Households.all(), complaints = Complaints.all(), commonAreas = CommonAreas.all(), types = Types.all();
+  const households = Households.all(), complaints = Complaints.all(), commonAreas = CommonAreas.all(), types = Types.all(), memos = Memos.all();
   document.getElementById('backupStatGrid').innerHTML = [
     {label:'세대', value:households.length}, {label:'공용부', value:commonAreas.length},
-    {label:'민원유형', value:types.length}, {label:'민원이력', value:complaints.length}
+    {label:'민원유형', value:types.length}, {label:'민원이력', value:complaints.length},
+    {label:'민원 메모', value:memos.length}
   ].map(s=>`<div class="statTile"><div class="label">${s.label}</div><div class="value">${s.value.toLocaleString()}</div></div>`).join('');
 }
 document.getElementById('exportBackupBtn').addEventListener('click', ()=>{
   const data = {
     exportedAt: new Date().toISOString(),
     households: Households.all(), commonAreas: CommonAreas.all(),
-    types: Types.all(), complaints: Complaints.all()
+    types: Types.all(), complaints: Complaints.all(), memos: Memos.all()
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1511,6 +1657,7 @@ document.getElementById('restoreFileInput').addEventListener('change', (e)=>{
       if(data.commonAreas) await CommonAreas.replaceAllPreserveIds(data.commonAreas);
       if(data.types) await Types.replaceAllPreserveIds(data.types);
       if(data.complaints) await Complaints.replaceAllPreserveIds(data.complaints);
+      if(data.memos) await Memos.replaceAllPreserveIds(data.memos);
       toast('데이터를 복원했습니다.');
       document.getElementById('hh_f_dong').dataset.init='';
       document.getElementById('f_targetDetail').dataset.init='';
